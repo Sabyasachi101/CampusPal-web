@@ -1,0 +1,80 @@
+import { NavLink, useLocation } from "react-router-dom";
+import { Home, MessageSquare, Calendar, User, Bell, Search, Users, Settings, Shield } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const navigation = [
+  { name: "Feed", href: "/feed", icon: Home },
+  { name: "Chat", href: "/chat", icon: MessageSquare },
+  { name: "Events", href: "/events", icon: Calendar },
+  { name: "Profile", href: "/profile", icon: User },
+  { name: "Notifications", href: "/notifications", icon: Bell },
+  { name: "Search", href: "/search", icon: Search },
+  { name: "Clubs", href: "/clubs", icon: Users },
+];
+
+const bottomNavigation = [
+  { name: "Admin", href: "/admin", icon: Shield },
+  { name: "Settings", href: "/settings", icon: Settings },
+];
+
+export const Sidebar = () => {
+  const location = useLocation();
+
+  return (
+    <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-card border-r border-border transition-smooth animate-fade-in">
+      <div className="flex h-full flex-col">
+        {/* Logo */}
+        <div className="flex h-16 items-center gap-3 border-b border-border px-6">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <span className="text-xl font-bold">C</span>
+          </div>
+          <span className="text-xl font-bold">CampusPal</span>
+        </div>
+
+        {/* Main Navigation */}
+        <nav className="flex-1 space-y-1 px-3 py-4">
+          {navigation.map((item) => {
+            const isActive = location.pathname === item.href;
+            return (
+              <NavLink
+                key={item.name}
+                to={item.href}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-smooth",
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-soft"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <item.icon className="h-5 w-5" />
+                <span>{item.name}</span>
+              </NavLink>
+            );
+          })}
+        </nav>
+
+        {/* Bottom Navigation */}
+        <nav className="space-y-1 border-t border-border px-3 py-4">
+          {bottomNavigation.map((item) => {
+            const isActive = location.pathname === item.href;
+            return (
+              <NavLink
+                key={item.name}
+                to={item.href}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-smooth",
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-soft"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <item.icon className="h-5 w-5" />
+                <span>{item.name}</span>
+              </NavLink>
+            );
+          })}
+        </nav>
+      </div>
+    </aside>
+  );
+};
