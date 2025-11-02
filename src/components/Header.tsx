@@ -2,6 +2,7 @@ import { Search, Bell, MessageSquare } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export const Header = () => {
   return (
@@ -21,6 +22,7 @@ export const Header = () => {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-5 w-5" />
             <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive" />
