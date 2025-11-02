@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/Sidebar";
+import { MobileNav } from "@/components/MobileNav";
 import { Header } from "@/components/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -60,14 +61,15 @@ export default function Clubs() {
   return (
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
+      <MobileNav />
       
-      <div className="ml-64 flex-1">
+      <div className="lg:ml-64 flex-1">
         <Header />
         
-        <main className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <main className="p-4 sm:p-6 pb-20 lg:pb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
             {/* My Communities Sidebar */}
-            <Card className="p-6 h-fit shadow-soft animate-fade-in">
+            <Card className="p-4 sm:p-6 h-fit shadow-soft animate-fade-in order-2 lg:order-1">
               <h3 className="font-bold text-sm mb-4 text-muted-foreground">MY COMMUNITIES</h3>
               <div className="space-y-2">
                 {myCommunities.map((community, index) => (
@@ -85,9 +87,9 @@ export default function Clubs() {
             </Card>
 
             {/* Main Content */}
-            <div className="lg:col-span-2 space-y-6 animate-slide-up">
+            <div className="lg:col-span-2 space-y-4 sm:space-y-6 animate-slide-up order-1 lg:order-2">
               <div>
-                <h1 className="text-3xl font-bold mb-2">Explore Campus Communities</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold mb-2">Explore Campus Communities</h1>
                 <div className="relative mt-4">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -133,7 +135,7 @@ export default function Clubs() {
             </div>
 
             {/* Club Details Sidebar */}
-            <div className="space-y-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
+            <div className="space-y-4 sm:space-y-6 animate-slide-up order-3" style={{ animationDelay: '200ms' }}>
               <Card className="overflow-hidden shadow-soft">
                 <div className="h-32 gradient-hero" />
                 <div className="p-6">

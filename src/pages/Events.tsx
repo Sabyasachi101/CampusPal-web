@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/Sidebar";
+import { MobileNav } from "@/components/MobileNav";
 import { Header } from "@/components/Header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,20 +32,21 @@ export default function Events() {
   return (
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
+      <MobileNav />
       
-      <div className="ml-64 flex-1">
+      <div className="lg:ml-64 flex-1">
         <Header />
         
-        <main className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <main className="p-4 sm:p-6 pb-20 lg:pb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
             {/* Events List */}
-            <div className="lg:col-span-2 space-y-6 animate-slide-up">
-              <div className="flex items-center justify-between">
+            <div className="lg:col-span-2 space-y-4 sm:space-y-6 animate-slide-up">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
-                  <h1 className="text-3xl font-bold mb-2">Upcoming Events</h1>
-                  <p className="text-muted-foreground">Discover what's happening around campus.</p>
+                  <h1 className="text-2xl sm:text-3xl font-bold mb-2">Upcoming Events</h1>
+                  <p className="text-sm text-muted-foreground">Discover what's happening around campus.</p>
                 </div>
-                <Button className="gap-2">
+                <Button className="gap-2 w-full sm:w-auto">
                   <Plus className="h-4 w-4" />
                   Create
                 </Button>
@@ -106,7 +108,7 @@ export default function Events() {
             </div>
 
             {/* Event Details Sidebar */}
-            <div className="space-y-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
+            <div className="hidden lg:block space-y-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
               <Card className="overflow-hidden shadow-soft">
                 <div className="h-48 overflow-hidden">
                   <img

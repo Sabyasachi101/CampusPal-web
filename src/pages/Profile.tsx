@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/Sidebar";
+import { MobileNav } from "@/components/MobileNav";
 import { Header } from "@/components/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -39,31 +40,32 @@ export default function Profile() {
   return (
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
+      <MobileNav />
       
-      <div className="ml-64 flex-1">
+      <div className="lg:ml-64 flex-1">
         <Header />
         
-        <main className="animate-slide-up">
+        <main className="animate-slide-up pb-20 lg:pb-0">
           {/* Cover & Profile */}
           <div className="relative">
-            <div className="h-48 gradient-hero" />
-            <div className="container max-w-5xl mx-auto px-6">
-              <div className="relative -mt-20 mb-6">
-                <div className="flex flex-col md:flex-row gap-6 items-start">
-                  <Avatar className="h-32 w-32 border-4 border-background shadow-medium">
+            <div className="h-32 sm:h-48 gradient-hero" />
+            <div className="container max-w-5xl mx-auto px-4 sm:px-6">
+              <div className="relative -mt-16 sm:-mt-20 mb-6">
+                <div className="flex flex-col md:flex-row gap-4 sm:gap-6 items-start">
+                  <Avatar className="h-24 w-24 sm:h-32 sm:w-32 border-4 border-background shadow-medium">
                     <AvatarImage src="/placeholder.svg" alt="Alex Doe" />
-                    <AvatarFallback className="text-3xl">AD</AvatarFallback>
+                    <AvatarFallback className="text-2xl sm:text-3xl">AD</AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="bg-card rounded-lg p-6 shadow-soft">
-                      <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1 min-w-0 w-full">
+                    <div className="bg-card rounded-lg p-4 sm:p-6 shadow-soft">
+                      <div className="flex flex-col sm:flex-row items-start justify-between gap-3 mb-4">
                         <div>
-                          <h1 className="text-2xl font-bold mb-1">Alex Doe</h1>
-                          <p className="text-muted-foreground">Computer Science Major</p>
+                          <h1 className="text-xl sm:text-2xl font-bold mb-1">Alex Doe</h1>
+                          <p className="text-sm text-muted-foreground">Computer Science Major</p>
                         </div>
-                        <Button>Edit Profile</Button>
+                        <Button className="w-full sm:w-auto">Edit Profile</Button>
                       </div>
-                      <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                           <MapPin className="h-4 w-4" />
                           <span>Campus University</span>
@@ -103,10 +105,10 @@ export default function Profile() {
           </div>
 
           {/* Content */}
-          <div className="container max-w-5xl mx-auto px-6 pb-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="container max-w-5xl mx-auto px-4 sm:px-6 pb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
               {/* Main Content */}
-              <div className="lg:col-span-2 space-y-6">
+              <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                 <Tabs defaultValue="posts" className="w-full">
                   <TabsList className="w-full">
                     <TabsTrigger value="posts" className="flex-1">My Posts</TabsTrigger>
@@ -179,7 +181,7 @@ export default function Profile() {
               </div>
 
               {/* Sidebar */}
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 <Card className="p-4 shadow-soft">
                   <h3 className="font-bold text-sm mb-4">About</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">

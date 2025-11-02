@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/Sidebar";
+import { MobileNav } from "@/components/MobileNav";
 import { Header } from "@/components/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -12,14 +13,15 @@ export default function Settings() {
   return (
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
+      <MobileNav />
       
-      <div className="ml-64 flex-1">
+      <div className="lg:ml-64 flex-1">
         <Header />
         
-        <main className="p-6 max-w-5xl mx-auto animate-slide-up">
+        <main className="p-4 sm:p-6 pb-20 lg:pb-6 max-w-5xl mx-auto animate-slide-up">
           <div className="mb-6">
-            <h1 className="text-3xl font-bold mb-2">Settings</h1>
-            <p className="text-muted-foreground">Manage your account settings and preferences.</p>
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2">Settings</h1>
+            <p className="text-sm text-muted-foreground">Manage your account settings and preferences.</p>
           </div>
 
           <Tabs defaultValue="account" className="space-y-6">
@@ -34,16 +36,16 @@ export default function Settings() {
               <Card className="p-6 shadow-soft">
                 <h3 className="text-xl font-bold mb-6">Profile Information</h3>
                 
-                <div className="flex items-center gap-4 mb-6">
+                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 mb-6">
                   <Avatar className="h-20 w-20">
                     <AvatarImage src="/placeholder.svg" alt="Alex Doe" />
                     <AvatarFallback className="text-lg">AD</AvatarFallback>
                   </Avatar>
-                  <div className="flex-1">
+                  <div className="flex-1 text-center sm:text-left">
                     <h4 className="font-semibold">Alex Doe</h4>
                     <p className="text-sm text-muted-foreground">Computer Science</p>
                   </div>
-                  <Button variant="outline">Change Photo</Button>
+                  <Button variant="outline" className="w-full sm:w-auto">Change Photo</Button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -73,14 +75,14 @@ export default function Settings() {
                 </div>
               </Card>
 
-              <div className="flex items-center justify-between">
-                <Button variant="ghost" className="gap-2 text-destructive hover:text-destructive">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <Button variant="ghost" className="gap-2 text-destructive hover:text-destructive w-full sm:w-auto">
                   <LogOut className="h-4 w-4" />
                   Logout
                 </Button>
                 <div className="flex gap-3">
-                  <Button variant="outline">Cancel</Button>
-                  <Button>Save Changes</Button>
+                  <Button variant="outline" className="flex-1 sm:flex-none">Cancel</Button>
+                  <Button className="flex-1 sm:flex-none">Save Changes</Button>
                 </div>
               </div>
             </TabsContent>

@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/Sidebar";
+import { MobileNav } from "@/components/MobileNav";
 import { Header } from "@/components/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -57,14 +58,15 @@ export default function SearchPage() {
   return (
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
+      <MobileNav />
       
-      <div className="ml-64 flex-1">
+      <div className="lg:ml-64 flex-1">
         <Header />
         
-        <main className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <main className="p-4 sm:p-6 pb-20 lg:pb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
             {/* Filters Sidebar */}
-            <Card className="p-6 h-fit shadow-soft animate-fade-in">
+            <Card className="p-4 sm:p-6 h-fit shadow-soft animate-fade-in order-2 lg:order-1">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold">Filter by</h3>
                 <Button variant="link" className="text-primary p-0 h-auto">Clear all</Button>
@@ -134,10 +136,10 @@ export default function SearchPage() {
             </Card>
 
             {/* Search Results */}
-            <div className="lg:col-span-2 space-y-6 animate-slide-up">
+            <div className="lg:col-span-2 space-y-4 sm:space-y-6 animate-slide-up order-1 lg:order-2">
               <div>
-                <h1 className="text-2xl font-bold mb-2">Showing 124 results for 'Design'</h1>
-                <div className="flex items-center gap-2 mb-4">
+                <h1 className="text-xl sm:text-2xl font-bold mb-2">Showing 124 results for 'Design'</h1>
+                <div className="flex flex-wrap items-center gap-2 mb-4">
                   <span className="text-sm text-muted-foreground">Sort by:</span>
                   <Button variant="ghost" size="sm">Relevance ▼</Button>
                 </div>
@@ -224,7 +226,7 @@ export default function SearchPage() {
             </div>
 
             {/* Right Sidebar */}
-            <div className="space-y-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
+            <div className="hidden lg:block space-y-6 animate-slide-up order-3" style={{ animationDelay: '200ms' }}>
               <Card className="p-4 shadow-soft">
                 <h4 className="font-semibold text-sm mb-4">Suggested Clubs</h4>
                 <div className="space-y-3">

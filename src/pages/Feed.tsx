@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/Sidebar";
+import { MobileNav } from "@/components/MobileNav";
 import { Header } from "@/components/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -44,14 +45,15 @@ export default function Feed() {
   return (
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
+      <MobileNav />
       
-      <div className="ml-64 flex-1">
+      <div className="lg:ml-64 flex-1">
         <Header />
         
-        <main className="mx-auto max-w-7xl p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <main className="mx-auto max-w-7xl p-4 sm:p-6 pb-20 lg:pb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
             {/* Main Feed */}
-            <div className="lg:col-span-2 space-y-6 animate-slide-up">
+            <div className="lg:col-span-2 space-y-4 sm:space-y-6 animate-slide-up">
               {/* Create Post */}
               <Card className="p-4 shadow-soft hover:shadow-medium transition-smooth">
                 <div className="flex gap-3">
@@ -136,7 +138,7 @@ export default function Feed() {
             </div>
 
             {/* Sidebar */}
-            <div className="space-y-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
+            <div className="hidden lg:block space-y-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
               {/* Upcoming Events */}
               <Card className="p-4 shadow-soft">
                 <h3 className="font-bold text-sm mb-4">Upcoming Campus Events</h3>

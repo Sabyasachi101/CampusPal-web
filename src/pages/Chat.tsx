@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/Sidebar";
+import { MobileNav } from "@/components/MobileNav";
 import { Header } from "@/components/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -82,13 +83,14 @@ export default function Chat() {
   return (
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
+      <MobileNav />
       
-      <div className="ml-64 flex-1 flex flex-col h-screen">
+      <div className="lg:ml-64 flex-1 flex flex-col h-screen">
         <Header />
         
-        <main className="flex-1 flex overflow-hidden">
+        <main className="flex-1 flex overflow-hidden pb-16 lg:pb-0">
           {/* Conversations List */}
-          <div className="w-80 border-r border-border bg-card flex flex-col animate-fade-in">
+          <div className="hidden md:flex md:w-80 border-r border-border bg-card flex-col animate-fade-in">
             <div className="p-4 border-b border-border">
               <h2 className="text-2xl font-bold mb-4">Chats</h2>
               <div className="relative">
@@ -145,7 +147,7 @@ export default function Chat() {
           {/* Chat Area */}
           <div className="flex-1 flex flex-col bg-background animate-slide-up">
             {/* Chat Header */}
-            <div className="h-16 border-b border-border flex items-center justify-between px-6 bg-card">
+            <div className="h-16 border-b border-border flex items-center justify-between px-4 sm:px-6 bg-card">
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <Avatar>
@@ -160,20 +162,20 @@ export default function Chat() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" className="h-9 w-9">
                   <Phone className="h-5 w-5" />
                 </Button>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" className="h-9 w-9">
                   <Video className="h-5 w-5" />
                 </Button>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" className="h-9 w-9">
                   <MoreVertical className="h-5 w-5" />
                 </Button>
               </div>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
               <div className="flex justify-center">
                 <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">Today</span>
               </div>

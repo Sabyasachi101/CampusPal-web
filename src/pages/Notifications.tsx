@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/Sidebar";
+import { MobileNav } from "@/components/MobileNav";
 import { Header } from "@/components/Header";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -67,14 +68,15 @@ export default function Notifications() {
   return (
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
+      <MobileNav />
       
-      <div className="ml-64 flex-1">
+      <div className="lg:ml-64 flex-1">
         <Header />
         
-        <main className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <main className="p-4 sm:p-6 pb-20 lg:pb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
             {/* Filters */}
-            <Card className="p-6 h-fit shadow-soft animate-fade-in">
+            <Card className="p-4 sm:p-6 h-fit shadow-soft animate-fade-in order-2 lg:order-1">
               <h3 className="font-bold mb-4">Filters</h3>
               <p className="text-xs text-muted-foreground mb-4">Manage your alerts</p>
               <div className="space-y-2">
@@ -99,10 +101,10 @@ export default function Notifications() {
             </Card>
 
             {/* Notifications List */}
-            <div className="lg:col-span-3 space-y-4 animate-slide-up">
-              <div className="flex items-center justify-between mb-6">
-                <h1 className="text-3xl font-bold">Notifications</h1>
-                <Button variant="ghost">Mark all as read</Button>
+            <div className="lg:col-span-3 space-y-4 animate-slide-up order-1 lg:order-2">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+                <h1 className="text-2xl sm:text-3xl font-bold">Notifications</h1>
+                <Button variant="ghost" size="sm">Mark all as read</Button>
               </div>
 
               {notifications.map((notification, index) => (
@@ -133,9 +135,9 @@ export default function Notifications() {
                     </div>
 
                     {notification.type === "friend_request" && (
-                      <div className="flex gap-2">
-                        <Button size="sm">Accept</Button>
-                        <Button size="sm" variant="ghost">Decline</Button>
+                      <div className="flex gap-2 flex-col sm:flex-row">
+                        <Button size="sm" className="w-full sm:w-auto">Accept</Button>
+                        <Button size="sm" variant="ghost" className="w-full sm:w-auto">Decline</Button>
                       </div>
                     )}
                     

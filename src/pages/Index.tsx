@@ -24,25 +24,25 @@ export default function Index() {
       </header>
 
       {/* Hero Section */}
-      <section className="container mx-auto px-4 pt-20 pb-16">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          <div className="space-y-6 animate-slide-up">
-            <h1 className="text-5xl lg:text-6xl font-bold text-white leading-tight">
+      <section className="container mx-auto px-4 pt-12 sm:pt-20 pb-12 sm:pb-16">
+        <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
+          <div className="space-y-4 sm:space-y-6 animate-slide-up text-center lg:text-left">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight">
               Your Campus,
               <br />
               Connected.
             </h1>
-            <p className="text-lg text-gray-300 max-w-md">
+            <p className="text-base sm:text-lg text-gray-300 max-w-md mx-auto lg:mx-0">
               The ultimate social network for college students to chat, share, and discover events.
             </p>
-            <div className="flex flex-wrap gap-4">
-              <Link to="/feed">
-                <Button size="lg" className="bg-primary hover:bg-primary/90 h-12 px-8">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-center lg:justify-start">
+              <Link to="/feed" className="w-full sm:w-auto">
+                <Button size="lg" className="bg-primary hover:bg-primary/90 h-12 px-8 w-full sm:w-auto">
                   Sign Up for Free
                 </Button>
               </Link>
-              <Link to="/login">
-                <Button size="lg" variant="ghost" className="text-white hover:bg-white/10 h-12 px-8">
+              <Link to="/login" className="w-full sm:w-auto">
+                <Button size="lg" variant="ghost" className="text-white hover:bg-white/10 h-12 px-8 w-full sm:w-auto">
                   Already have account? Log In
                 </Button>
               </Link>
@@ -56,15 +56,15 @@ export default function Index() {
       </section>
 
       {/* Features Section */}
-      <section className="container mx-auto px-4 py-20">
-        <div className="text-center mb-12 animate-slide-up">
-          <h2 className="text-4xl font-bold text-white mb-4">What You Can Do on CampusPal</h2>
-          <p className="text-gray-300 max-w-2xl mx-auto">
+      <section className="container mx-auto px-4 py-12 sm:py-20">
+        <div className="text-center mb-8 sm:mb-12 animate-slide-up">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-3 sm:mb-4">What You Can Do on CampusPal</h2>
+          <p className="text-sm sm:text-base text-gray-300 max-w-2xl mx-auto px-4">
             Everything you need to stay connected with your campus community, all in one place.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
           {[
             {
               icon: MessageSquare,
