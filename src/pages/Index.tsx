@@ -36,7 +36,7 @@ export default function Index() {
               The ultimate social network for college students to chat, share, and discover events.
             </p>
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-center lg:justify-start">
-              <Link to="/feed" className="w-full sm:w-auto">
+              <Link to="/signup" className="w-full sm:w-auto">
                 <Button size="lg" className="bg-primary hover:bg-primary/90 h-12 px-8 w-full sm:w-auto">
                   Sign Up for Free
                 </Button>

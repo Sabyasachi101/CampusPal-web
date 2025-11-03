@@ -1,95 +1,113 @@
+"use client";
+import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileNav } from "@/components/MobileNav";
 import { Header } from "@/components/Header";
-import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Phone, Video, MoreVertical, Send, Smile, Paperclip } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Phone,
+  Video,
+  MoreVertical,
+  Send,
+  Smile,
+  Paperclip,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { auth, db } from "@/FirebaseConfig";
+import {
+  collection,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+} from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 
-const conversations = [
-  {
-    id: 1,
-    name: "Emily Carter",
-    avatar: "/placeholder.svg",
-    lastMessage: "Yeah, I did. I'll send them ov...",
-    time: "10:42 AM",
-    unread: 2,
-    online: true,
-  },
-  {
-    id: 2,
-    name: "Chem 101 Study Group",
-    avatar: "/placeholder.svg",
-    lastMessage: "Alex: Don't forget the quiz tom...",
-    time: "Yesterday",
-    unread: 0,
-    online: false,
-  },
-  {
-    id: 3,
-    name: "Alex Johnson",
-    avatar: "/placeholder.svg",
-    lastMessage: "Let's meet at the library at 3.",
-    time: "2d ago",
-    unread: 0,
-    online: false,
-  },
-  {
-    id: 4,
-    name: "Design Club",
-    avatar: "/placeholder.svg",
-    lastMessage: "New project brief is up!",
-    time: "11:15 AM",
-    unread: 1,
-    online: false,
-  },
-];
-
-const messages = [
-  {
-    id: 1,
-    sender: "Emily Carter",
-    content: "Hey! Did you get the notes from yesterday's lecture?",
-    time: "10:40 AM",
-    isMe: false,
-  },
-  {
-    id: 2,
-    sender: "Me",
-    content: "Yeah, I did. I'll send them over. One sec.",
-    time: "10:41 AM",
-    isMe: true,
-  },
-  {
-    id: 3,
-    sender: "Emily Carter",
-    content: "Here you go! Let me know if you can read my handwriting haha.",
-    time: "10:42 AM",
-    image: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&auto=format&fit=crop",
-    isMe: false,
-  },
-  {
-    id: 4,
-    sender: "Me",
-    content: "Perfect, thanks so much! You're a lifesaver.",
-    time: "10:41 AM",
-    isMe: true,
-  },
-];
+interface Message {
+  id: string;
+  text: string;
+  senderId: string;
+  receiverId: string;
+  timestamp?: any;
+}
 
 export default function Chat() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [userId, setUserId] = useState<string>("");
+  const [receiverId] = useState<string>("testReceiverId123"); // 🔁 Replace with dynamic id later
+
+  // ✅ Track signed-in user
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user) setUserId(user.uid);
+    });
+    return () => unsub();
+  }, []);
+
+  // ✅ Fetch live messages
+  useEffect(() => {
+    if (!userId || !receiverId) return;
+
+    const q = query(
+      collection(db, "messages"),
+      where("participants", "array-contains", userId),
+      orderBy("timestamp", "asc")
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      const fetched = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      })) as Message[];
+
+      const filtered = fetched.filter(
+        (msg) =>
+          (msg.senderId === userId && msg.receiverId === receiverId) ||
+          (msg.senderId === receiverId && msg.receiverId === userId)
+      );
+
+      setMessages(filtered);
+    });
+
+    return () => unsub();
+  }, [userId, receiverId]);
+
+  // ✅ Send message to Firestore
+  const handleSend = async () => {
+    if (!input.trim() || !userId) return;
+
+    await addDoc(collection(db, "messages"), {
+      text: input.trim(),
+      senderId: userId,
+      receiverId,
+      participants: [userId, receiverId],
+      timestamp: serverTimestamp(),
+    });
+
+    setInput("");
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") handleSend();
+  };
+
   return (
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
       <MobileNav />
-      
+
       <div className="lg:ml-64 flex-1 flex flex-col h-screen">
         <Header />
-        
+
         <main className="flex-1 flex overflow-hidden pb-16 lg:pb-0">
-          {/* Conversations List */}
+          {/* Chat Sidebar */}
           <div className="hidden md:flex md:w-80 border-r border-border bg-card flex-col animate-fade-in">
             <div className="p-4 border-b border-border">
               <h2 className="text-2xl font-bold mb-4">Chats</h2>
@@ -102,40 +120,35 @@ export default function Chat() {
                 />
               </div>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto">
-              {conversations.map((conv) => (
-                <button
-                  key={conv.id}
-                  className={`w-full p-4 flex items-start gap-3 hover:bg-muted/50 transition-smooth border-b border-border ${
-                    conv.id === 1 ? "bg-muted/50" : ""
-                  }`}
-                >
-                  <div className="relative">
-                    <Avatar>
-                      <AvatarImage src={conv.avatar} alt={conv.name} />
-                      <AvatarFallback>{conv.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                    </Avatar>
-                    {conv.online && (
-                      <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
-                    )}
+              <button className="w-full p-4 flex items-start gap-3 bg-muted/50 transition-smooth border-b border-border">
+                <div className="relative">
+                  <Avatar>
+                    <AvatarImage src="/placeholder.svg" alt="Emily Carter" />
+                    <AvatarFallback>EC</AvatarFallback>
+                  </Avatar>
+                  <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="flex items-center justify-between mb-1">
+                    <h4 className="font-semibold text-sm truncate">
+                      Emily Carter
+                    </h4>
+                    <span className="text-xs text-muted-foreground">
+                      Active
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0 text-left">
-                    <div className="flex items-center justify-between mb-1">
-                      <h4 className="font-semibold text-sm truncate">{conv.name}</h4>
-                      <span className="text-xs text-muted-foreground">{conv.time}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate">{conv.lastMessage}</p>
-                  </div>
-                  {conv.unread > 0 && (
-                    <Badge className="bg-primary text-primary-foreground h-5 min-w-[20px] flex items-center justify-center rounded-full text-xs">
-                      {conv.unread}
-                    </Badge>
-                  )}
-                </button>
-              ))}
+                  <p className="text-xs text-muted-foreground truncate">
+                    Chatting live...
+                  </p>
+                </div>
+                <Badge className="bg-primary text-primary-foreground h-5 min-w-[20px] flex items-center justify-center rounded-full text-xs">
+                  1
+                </Badge>
+              </button>
             </div>
-            
+
             <div className="p-4 border-t border-border">
               <Button className="w-full gap-2">
                 <Plus className="h-4 w-4" />
@@ -144,31 +157,28 @@ export default function Chat() {
             </div>
           </div>
 
-          {/* Chat Area */}
+          {/* Chat Main */}
           <div className="flex-1 flex flex-col bg-background animate-slide-up">
-            {/* Chat Header */}
+            {/* Header */}
             <div className="h-16 border-b border-border flex items-center justify-between px-4 sm:px-6 bg-card">
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Avatar>
-                    <AvatarImage src="/placeholder.svg" alt="Emily Carter" />
-                    <AvatarFallback>EC</AvatarFallback>
-                  </Avatar>
-                  <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
-                </div>
+                <Avatar>
+                  <AvatarImage src="/placeholder.svg" alt="Emily Carter" />
+                  <AvatarFallback>EC</AvatarFallback>
+                </Avatar>
                 <div>
                   <h3 className="font-semibold text-sm">Emily Carter</h3>
                   <p className="text-xs text-green-500">Online</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="h-9 w-9">
+                <Button variant="ghost" size="icon">
                   <Phone className="h-5 w-5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9">
+                <Button variant="ghost" size="icon">
                   <Video className="h-5 w-5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9">
+                <Button variant="ghost" size="icon">
                   <MoreVertical className="h-5 w-5" />
                 </Button>
               </div>
@@ -177,37 +187,36 @@ export default function Chat() {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
               <div className="flex justify-center">
-                <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">Today</span>
+                <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                  Today
+                </span>
               </div>
-              
+
               {messages.map((msg) => (
-                <div key={msg.id} className={`flex gap-3 ${msg.isMe ? "justify-end" : ""}`}>
-                  {!msg.isMe && (
+                <div
+                  key={msg.id}
+                  className={`flex gap-3 ${
+                    msg.senderId === userId ? "justify-end" : ""
+                  }`}
+                >
+                  {msg.senderId !== userId && (
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src="/placeholder.svg" alt={msg.sender} />
+                      <AvatarImage src="/placeholder.svg" alt="User" />
                       <AvatarFallback>EC</AvatarFallback>
                     </Avatar>
                   )}
-                  <div className={`max-w-md ${msg.isMe ? "items-end" : ""}`}>
+                  <div className={`max-w-md ${msg.senderId === userId ? "items-end" : ""}`}>
                     <div
                       className={`rounded-2xl p-3 ${
-                        msg.isMe
+                        msg.senderId === userId
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted"
                       }`}
                     >
-                      <p className="text-sm">{msg.content}</p>
-                      {msg.image && (
-                        <img
-                          src={msg.image}
-                          alt="Shared content"
-                          className="mt-2 rounded-lg max-w-full"
-                        />
-                      )}
+                      <p className="text-sm">{msg.text}</p>
                     </div>
-                    <span className="text-xs text-muted-foreground mt-1 block">{msg.time}</span>
                   </div>
-                  {msg.isMe && (
+                  {msg.senderId === userId && (
                     <Avatar className="h-8 w-8">
                       <AvatarImage src="/placeholder.svg" alt="You" />
                       <AvatarFallback>ME</AvatarFallback>
@@ -217,7 +226,7 @@ export default function Chat() {
               ))}
             </div>
 
-            {/* Message Input */}
+            {/* Input */}
             <div className="border-t border-border bg-card p-4">
               <div className="flex items-end gap-3">
                 <Button variant="ghost" size="icon" className="shrink-0">
@@ -228,9 +237,12 @@ export default function Chat() {
                 </Button>
                 <Input
                   placeholder="Type a message..."
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyPress}
                   className="flex-1 bg-muted/50"
                 />
-                <Button size="icon" className="shrink-0">
+                <Button size="icon" onClick={handleSend} className="shrink-0">
                   <Send className="h-4 w-4" />
                 </Button>
               </div>

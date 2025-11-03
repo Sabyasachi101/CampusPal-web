@@ -1,58 +1,42 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import logo from '../../public/logo.png'
 import { Checkbox } from "@/components/ui/checkbox";
-import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { Mail, Lock, Eye, EyeOff, User } from "lucide-react";
 import { auth, provider } from "@/FirebaseConfig";
-import {
-  signInWithPopup,
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-  setPersistence,
-  browserLocalPersistence,
-} from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 
-export default function Login() {
+export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const navigate = useNavigate();
+  const [confirmPassword, setConfirmPassword] = useState("");
 
-  // ✅ Keep user logged in even after refresh
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        navigate("/feed"); // Redirect if already logged in
-      }
-    });
-    return () => unsubscribe();
-  }, [navigate]);
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  // ✅ Google Sign-In
-  const handleGoogleLogin = async () => {
+    if (password !== confirmPassword) {
+      alert("Passwords do not match!");
+      return;
+    }
+
     try {
-      await setPersistence(auth, browserLocalPersistence);
-      const result = await signInWithPopup(auth, provider);
-      console.log("Logged in:", result.user.displayName);
-      navigate("/feed");
+      await createUserWithEmailAndPassword(auth, email, password);
+      alert(`Welcome ${fullName}! Your account has been created.`);
     } catch (error: any) {
-      console.error("Google Sign-in Error:", error);
       alert(error.message);
     }
   };
 
-  // ✅ Email + Password Login
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGoogleSignUp = async () => {
     try {
-      await setPersistence(auth, browserLocalPersistence);
-      await signInWithEmailAndPassword(auth, email, password);
-      navigate("/feed");
+      await signInWithPopup(auth, provider);
+      alert("Signed up successfully with Google!");
     } catch (error: any) {
-      console.error("Login Error:", error);
       alert(error.message);
     }
   };
@@ -64,15 +48,16 @@ export default function Login() {
         <div className="max-w-md text-white">
           <div className="flex items-center gap-3 mb-8">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 backdrop-blur">
-              <img src="/assets/campuspal-logo.png" alt="CampusPal Logo" className="h-6 w-6" />
+              <span className="text-2xl font-bold">C</span>
             </div>
             <span className="text-2xl font-bold">CampusPal</span>
           </div>
           <h1 className="text-4xl font-bold mb-4 leading-tight">
-            Your Campus,
-            <br />
-            Connected.
+            Join Your Campus<br />Community.
           </h1>
+          <p className="text-lg text-white/80">
+            Connect with students, join clubs, and stay updated with campus events.
+          </p>
         </div>
       </div>
 
@@ -82,22 +67,24 @@ export default function Login() {
           {/* Mobile Logo */}
           <div className="flex lg:hidden items-center gap-3 justify-center">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <img src={logo} alt="CampusPal Logo" className="h-5 w-5" />
+              <span className="text-xl font-bold">C</span>
             </div>
             <span className="text-xl font-bold">CampusPal</span>
           </div>
 
           <div className="text-center lg:text-left">
-            <h2 className="text-3xl font-bold mb-2">Welcome Back!</h2>
+            <h2 className="text-3xl font-bold mb-2">Create Account</h2>
+            <p className="text-muted-foreground">Join the campus community today</p>
           </div>
 
           <div className="space-y-6">
-            {/* Google Sign In */}
+            {/* Google Sign Up */}
             <Button
               variant="outline"
               className="w-full gap-2 h-11"
               size="lg"
-              onClick={handleGoogleLogin}
+              type="button"
+              onClick={handleGoogleSignUp}
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path
@@ -129,8 +116,23 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Email Form */}
-            <form className="space-y-4" onSubmit={handleEmailLogin}>
+            {/* Email Sign Up Form */}
+            <form className="space-y-4" onSubmit={handleSignUp}>
+              <div className="space-y-2">
+                <Label htmlFor="fullname">Full Name</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="fullname"
+                    type="text"
+                    placeholder="Enter your full name"
+                    className="pl-10 h-11"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
                 <div className="relative">
@@ -138,11 +140,10 @@ export default function Login() {
                   <Input
                     id="email"
                     type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email address"
                     className="pl-10 h-11"
-                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
               </div>
@@ -154,11 +155,10 @@ export default function Login() {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
+                    placeholder="Create a password"
+                    className="pl-10 pr-10 h-11"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    className="pl-10 pr-10 h-11"
-                    required
                   />
                   <button
                     type="button"
@@ -170,27 +170,51 @@ export default function Login() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Checkbox id="remember" />
-                  <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
-                    Remember Me
-                  </Label>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="confirm-password"
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="Confirm your password"
+                    className="pl-10 pr-10 h-11"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
-                <Link to="/forgot-password" className="text-sm text-primary hover:underline">
-                  Forgot Password?
-                </Link>
               </div>
 
-              <Button type="submit" className="w-full h-11" size="lg">
-                Log In
+              <div className="flex items-center space-x-2">
+                <Checkbox id="terms" />
+                <Label htmlFor="terms" className="text-sm font-normal cursor-pointer">
+                  I agree to the{" "}
+                  <Link to="/terms" className="text-primary hover:underline">
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link to="/privacy" className="text-primary hover:underline">
+                    Privacy Policy
+                  </Link>
+                </Label>
+              </div>
+
+              <Button className="w-full h-11" size="lg" type="submit">
+                Create Account
               </Button>
             </form>
 
             <p className="text-center text-sm text-muted-foreground">
-              Don’t have an account?{" "}
-              <Link to="/signup" className="text-primary hover:underline font-medium">
-                Sign Up
+              Already have an account?{" "}
+              <Link to="/login" className="text-primary hover:underline font-medium">
+                Log In
               </Link>
             </p>
           </div>
