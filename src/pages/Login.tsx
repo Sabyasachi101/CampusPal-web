@@ -1,59 +1,61 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import logo from '../../public/logo.png'
 import { Checkbox } from "@/components/ui/checkbox";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
-import { auth, provider } from "@/FirebaseConfig";
-import {
-  signInWithPopup,
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-  setPersistence,
-  browserLocalPersistence,
-} from "firebase/auth";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login, loginWithGoogle, currentUser } = useAuth();
 
-  // ✅ Keep user logged in even after refresh
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        navigate("/feed"); // Redirect if already logged in
-      }
-    });
-    return () => unsubscribe();
-  }, [navigate]);
+    if (currentUser) {
+      navigate("/feed");
+    }
+  }, [currentUser, navigate]);
 
-  // ✅ Google Sign-In
   const handleGoogleLogin = async () => {
+    setLoading(true);
     try {
-      await setPersistence(auth, browserLocalPersistence);
-      const result = await signInWithPopup(auth, provider);
-      console.log("Logged in:", result.user.displayName);
+      await loginWithGoogle();
       navigate("/feed");
     } catch (error: any) {
       console.error("Google Sign-in Error:", error);
-      alert(error.message);
+      toast.error(error.message || "Failed to login with Google");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ✅ Email + Password Login
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     try {
-      await setPersistence(auth, browserLocalPersistence);
-      await signInWithEmailAndPassword(auth, email, password);
+      await login(email, password);
       navigate("/feed");
     } catch (error: any) {
       console.error("Login Error:", error);
-      alert(error.message);
+      let errorMessage = "Failed to login";
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = "No account found with this email";
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = "Incorrect password";
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = "Invalid email address";
+      } else if (error.code === 'auth/invalid-credential') {
+        errorMessage = "Invalid email or password";
+      }
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -64,7 +66,7 @@ export default function Login() {
         <div className="max-w-md text-white">
           <div className="flex items-center gap-3 mb-8">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 backdrop-blur">
-              <img src="/assets/campuspal-logo.png" alt="CampusPal Logo" className="h-6 w-6" />
+              <span className="text-2xl font-bold">C</span>
             </div>
             <span className="text-2xl font-bold">CampusPal</span>
           </div>
@@ -82,7 +84,7 @@ export default function Login() {
           {/* Mobile Logo */}
           <div className="flex lg:hidden items-center gap-3 justify-center">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <img src={logo} alt="CampusPal Logo" className="h-5 w-5" />
+              <span className="text-lg font-bold">C</span>
             </div>
             <span className="text-xl font-bold">CampusPal</span>
           </div>
@@ -98,6 +100,7 @@ export default function Login() {
               className="w-full gap-2 h-11"
               size="lg"
               onClick={handleGoogleLogin}
+              disabled={loading}
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path
@@ -117,7 +120,7 @@ export default function Login() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                 />
               </svg>
-              Continue with Google
+              {loading ? "Signing in..." : "Continue with Google"}
             </Button>
 
             <div className="relative">
@@ -182,8 +185,8 @@ export default function Login() {
                 </Link>
               </div>
 
-              <Button type="submit" className="w-full h-11" size="lg">
-                Log In
+              <Button type="submit" className="w-full h-11" size="lg" disabled={loading}>
+                {loading ? "Logging in..." : "Log In"}
               </Button>
             </form>
 

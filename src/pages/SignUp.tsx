@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, User } from "lucide-react";
-import { auth, provider } from "@/FirebaseConfig";
-import { createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
@@ -15,29 +15,59 @@ export default function SignUp() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const { signup, loginWithGoogle, currentUser } = useAuth();
+
+  useEffect(() => {
+    if (currentUser) {
+      navigate("/feed");
+    }
+  }, [currentUser, navigate]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (password !== confirmPassword) {
-      alert("Passwords do not match!");
+      toast.error("Passwords do not match!");
       return;
     }
 
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    setLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      alert(`Welcome ${fullName}! Your account has been created.`);
+      await signup(email, password, fullName);
+      navigate("/feed");
     } catch (error: any) {
-      alert(error.message);
+      console.error("Signup Error:", error);
+      let errorMessage = "Failed to create account";
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = "Email already in use";
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = "Invalid email address";
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = "Password is too weak";
+      }
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleGoogleSignUp = async () => {
+    setLoading(true);
     try {
-      await signInWithPopup(auth, provider);
-      alert("Signed up successfully with Google!");
+      await loginWithGoogle();
+      navigate("/feed");
     } catch (error: any) {
-      alert(error.message);
+      console.error("Google Signup Error:", error);
+      toast.error(error.message || "Failed to sign up with Google");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -85,6 +115,7 @@ export default function SignUp() {
               size="lg"
               type="button"
               onClick={handleGoogleSignUp}
+              disabled={loading}
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path
@@ -104,7 +135,7 @@ export default function SignUp() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                 />
               </svg>
-              Continue with Google
+              {loading ? "Signing up..." : "Continue with Google"}
             </Button>
 
             <div className="relative">
@@ -206,8 +237,8 @@ export default function SignUp() {
                 </Label>
               </div>
 
-              <Button className="w-full h-11" size="lg" type="submit">
-                Create Account
+              <Button className="w-full h-11" size="lg" type="submit" disabled={loading}>
+                {loading ? "Creating Account..." : "Create Account"}
               </Button>
             </form>
 

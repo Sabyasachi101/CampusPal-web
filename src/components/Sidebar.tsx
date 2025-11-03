@@ -1,20 +1,20 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, MessageSquare, Calendar, User, Bell, Search, Users, Settings, Shield } from "lucide-react";
+import { Home, MessageSquare, Calendar, User, Bell, Search, Users, Settings, ShoppingBag, BookOpen, FileSearch, UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
-import logo from '../../public/logo.png'
 
 const navigation = [
   { name: "Feed", href: "/feed", icon: Home },
   { name: "Chat", href: "/chat", icon: MessageSquare },
   { name: "Events", href: "/events", icon: Calendar },
-  { name: "Profile", href: "/profile", icon: User },
-  { name: "Notifications", href: "/notifications", icon: Bell },
-  { name: "Search", href: "/search", icon: Search },
+  { name: "Directory", href: "/directory", icon: UsersRound },
+  { name: "Marketplace", href: "/marketplace", icon: ShoppingBag },
+  { name: "Study Corner", href: "/study-corner", icon: BookOpen },
+  { name: "Lost & Found", href: "/lost-found", icon: FileSearch },
   { name: "Clubs", href: "/clubs", icon: Users },
 ];
 
 const bottomNavigation = [
-  { name: "Admin", href: "/admin", icon: Shield },
+  { name: "Profile", href: "/profile", icon: User },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
@@ -27,7 +27,7 @@ export const Sidebar = () => {
         {/* Logo */}
         <div className="flex h-16 items-center gap-3 border-b border-border px-6">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <img src={logo} alt="CampusPal Logo" />
+            <span className="text-lg font-bold">C</span>
           </div>
           <span className="text-xl font-bold">CampusPal</span>
         </div>

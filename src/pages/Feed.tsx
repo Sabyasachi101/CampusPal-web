@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileNav } from "@/components/MobileNav";
 import { Header } from "@/components/Header";
@@ -5,43 +6,178 @@ import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Heart, MessageCircle, Share2, Image as ImageIcon, Video, Smile } from "lucide-react";
+import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, X } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { createPost, getPosts, likePost, unlikePost, uploadImage, Post, addComment, getComments, Comment } from "@/lib/firebase-utils";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatDistanceToNow } from "date-fns";
 
-const posts = [
-  {
-    id: 1,
-    author: "Maria Garcia",
-    handle: "@maria.garcia",
-    avatar: "/placeholder.svg",
-    time: "2 hours ago",
-    content: "Had a great time at the annual college fest! Here are some snaps from the event. 🎉 #CampusLife #FestVibes",
-    image: "https://images.unsplash.com/photo-1523580494863-6f3031224c94?w=800&auto=format&fit=crop",
-    likes: 128,
-    comments: 23,
-    shares: 12,
-  },
-  {
-    id: 2,
-    author: "Astronomy Club",
-    handle: "@astronomy",
-    avatar: "/placeholder.svg",
-    time: "Yesterday at 4:00 PM",
-    content: "Don't forget our stargazing event tonight at the observatory hill! Telescopes will be provided. Come and explore the cosmos with us! ✨ #Stargazing #Astronomy",
-    likes: 94,
-    comments: 15,
-    shares: 7,
-  },
+const categories = [
+  { value: 'all', label: 'All Posts' },
+  { value: 'academic', label: 'Academic' },
+  { value: 'events', label: 'Events' },
+  { value: 'clubs', label: 'Clubs' },
+  { value: 'lost-found', label: 'Lost & Found' },
+  { value: 'marketplace', label: 'Marketplace' },
+  { value: 'fun', label: 'Fun' },
 ];
-
-const upcomingEvents = [
-  { date: "OCT\n28", title: "Career Fair 2024", time: "10:00 AM - 4:00 PM", location: "Student Union" },
-  { date: "NOV\n05", title: "Homecoming Football Game", time: "2:00 PM", location: "University Stadium" },
-];
-
-const trending = ["#MidtermsAreComing", "#FallFest", "#StudyGroupFinder"];
 
 export default function Feed() {
+  const { currentUser, userProfile } = useAuth();
+  const navigate = useNavigate();
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [newPost, setNewPost] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<Post['category']>('fun');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState("");
+
+  useEffect(() => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    loadPosts();
+  }, [currentUser, filterCategory]);
+
+  async function loadPosts() {
+    setLoadingPosts(true);
+    try {
+      const fetchedPosts = await getPosts(filterCategory === 'all' ? undefined : filterCategory);
+      setPosts(fetchedPosts);
+    } catch (error) {
+      toast.error("Error loading posts");
+    } finally {
+      setLoadingPosts(false);
+    }
+  }
+
+  async function handleCreatePost() {
+    console.log("🚀 handleCreatePost called");
+    console.log("Text:", newPost);
+    console.log("Image:", imageFile);
+    console.log("Current User:", currentUser);
+    console.log("User Profile:", userProfile);
+
+    if (!newPost.trim() && !imageFile) {
+      toast.error("Please add some text or an image!");
+      return;
+    }
+    
+    if (!currentUser) {
+      toast.error("You must be logged in to post!");
+      navigate('/login');
+      return;
+    }
+
+    if (!userProfile) {
+      toast.error("Loading your profile... Please try again.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      console.log("⬆️ Starting post creation...");
+      let imageUrl = undefined;
+      
+      if (imageFile) {
+        console.log("📸 Uploading image...");
+        imageUrl = await uploadImage(imageFile, 'posts');
+        console.log("✅ Image uploaded:", imageUrl);
+      }
+
+      console.log("💾 Creating post in Firestore...");
+      await createPost({
+        authorId: currentUser.uid,
+        authorName: userProfile.displayName,
+        authorAvatar: userProfile.photoURL,
+        content: newPost,
+        imageUrl,
+        category: selectedCategory,
+      });
+
+      console.log("✅ Post created successfully!");
+      setNewPost("");
+      setImageFile(null);
+      setImagePreview("");
+      setSelectedCategory('fun');
+      toast.success("Post created!");
+      loadPosts();
+    } catch (error: any) {
+      console.error("❌ Error creating post:", error);
+      console.error("Error code:", error.code);
+      console.error("Error message:", error.message);
+      toast.error(`Failed to create post: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleLike(post: Post) {
+    if (!currentUser || !post.id) return;
+
+    const isLiked = post.likes?.includes(currentUser.uid);
+    try {
+      if (isLiked) {
+        await unlikePost(post.id, currentUser.uid);
+      } else {
+        await likePost(post.id, currentUser.uid);
+      }
+      loadPosts();
+    } catch (error) {
+      toast.error("Error updating like");
+    }
+  }
+
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  }
+
+  async function openComments(post: Post) {
+    setSelectedPost(post);
+    if (post.id) {
+      const fetchedComments = await getComments(post.id);
+      setComments(fetchedComments);
+    }
+  }
+
+  async function handleAddComment() {
+    if (!newComment.trim() || !selectedPost?.id || !currentUser || !userProfile) return;
+
+    try {
+      await addComment({
+        postId: selectedPost.id,
+        authorId: currentUser.uid,
+        authorName: userProfile.displayName,
+        authorAvatar: userProfile.photoURL,
+        content: newComment,
+      });
+      setNewComment("");
+      const fetchedComments = await getComments(selectedPost.id);
+      setComments(fetchedComments);
+      loadPosts();
+    } catch (error) {
+      toast.error("Error adding comment");
+    }
+  }
+
+  if (!currentUser) return null;
+
   return (
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
@@ -50,66 +186,123 @@ export default function Feed() {
       <div className="lg:ml-64 flex-1">
         <Header />
         
-        <main className="mx-auto max-w-7xl p-4 sm:p-6 pb-20 lg:pb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-            {/* Main Feed */}
-            <div className="lg:col-span-2 space-y-4 sm:space-y-6 animate-slide-up">
-              {/* Create Post */}
-              <Card className="p-4 shadow-soft hover:shadow-medium transition-smooth">
-                <div className="flex gap-3">
-                  <Avatar>
-                    <AvatarImage src="/placeholder.svg" alt="You" />
-                    <AvatarFallback className="bg-primary text-primary-foreground">LP</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <Textarea
-                      placeholder="What's on your mind, Logan?"
-                      className="min-h-[80px] resize-none border-0 bg-muted/50 focus-visible:ring-1"
-                    />
-                    <div className="flex items-center justify-between mt-3">
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" className="gap-2">
-                          <ImageIcon className="h-4 w-4" />
-                          <span className="hidden sm:inline">Photo</span>
-                        </Button>
-                        <Button variant="ghost" size="sm" className="gap-2">
-                          <Video className="h-4 w-4" />
-                          <span className="hidden sm:inline">Video</span>
-                        </Button>
-                        <Button variant="ghost" size="sm" className="gap-2">
-                          <Smile className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <Button className="bg-primary hover:bg-primary/90">Post</Button>
+        <main className="mx-auto max-w-4xl p-4 sm:p-6 pb-20 lg:pb-6">
+          <div className="mb-4">
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map(cat => (
+                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-4 sm:space-y-6 animate-slide-up">
+            <Card className="p-4 shadow-soft hover:shadow-medium transition-smooth">
+              <div className="flex gap-3">
+                <Avatar>
+                  <AvatarImage src={userProfile?.photoURL} />
+                  <AvatarFallback className="bg-primary text-primary-foreground">
+                    {userProfile?.displayName?.charAt(0) || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <Textarea
+                    placeholder={`What's on your mind, ${userProfile?.displayName}?`}
+                    value={newPost}
+                    onChange={(e) => setNewPost(e.target.value)}
+                    className="min-h-[80px] resize-none border-0 bg-muted/50 focus-visible:ring-1"
+                  />
+                  {imagePreview && (
+                    <div className="relative mt-2">
+                      <img src={imagePreview} alt="Preview" className="max-h-48 rounded" />
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="absolute top-2 right-2"
+                        onClick={() => { setImageFile(null); setImagePreview(""); }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
+                  )}
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        id="image-upload"
+                        onChange={handleImageSelect}
+                      />
+                      <label htmlFor="image-upload">
+                        <Button variant="ghost" size="sm" className="gap-2" asChild>
+                          <span>
+                            <ImageIcon className="h-4 w-4" />
+                            <span className="hidden sm:inline">Photo</span>
+                          </span>
+                        </Button>
+                      </label>
+                      <Select value={selectedCategory} onValueChange={(val) => setSelectedCategory(val as Post['category'])}>
+                        <SelectTrigger className="w-[140px] h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.filter(c => c.value !== 'all').map(cat => (
+                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button 
+                      className="bg-primary hover:bg-primary/90" 
+                      onClick={handleCreatePost}
+                      disabled={loading || (!newPost.trim() && !imageFile)}
+                    >
+                      {loading ? "Posting..." : "Post"}
+                    </Button>
                   </div>
                 </div>
-              </Card>
+              </div>
+            </Card>
 
-              {/* Posts */}
-              {posts.map((post, index) => (
+            {loadingPosts ? (
+              <div className="text-center py-8">Loading posts...</div>
+            ) : posts.length === 0 ? (
+              <Card className="p-8 text-center">
+                <p className="text-muted-foreground">No posts yet. Be the first to post!</p>
+              </Card>
+            ) : (
+              posts.map((post, index) => (
                 <Card key={post.id} className="overflow-hidden shadow-soft hover:shadow-medium transition-smooth" style={{ animationDelay: `${index * 100}ms` }}>
                   <div className="p-4">
                     <div className="flex items-start gap-3">
                       <Avatar>
-                        <AvatarImage src={post.avatar} alt={post.author} />
-                        <AvatarFallback>{post.author.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                        <AvatarImage src={post.authorAvatar} />
+                        <AvatarFallback>{post.authorName?.charAt(0) || 'U'}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h4 className="font-semibold text-sm">{post.author}</h4>
-                          <span className="text-xs text-muted-foreground">{post.handle}</span>
+                          <h4 className="font-semibold text-sm">{post.authorName}</h4>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                            {categories.find(c => c.value === post.category)?.label}
+                          </span>
                         </div>
-                        <p className="text-xs text-muted-foreground">{post.time}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {post.createdAt && formatDistanceToNow(post.createdAt.toDate(), { addSuffix: true })}
+                        </p>
                       </div>
                     </div>
                     
-                    <p className="mt-3 text-sm leading-relaxed">{post.content}</p>
+                    <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
                     
-                    {post.image && (
+                    {post.imageUrl && (
                       <div className="mt-3 -mx-4 overflow-hidden">
                         <img
-                          src={post.image}
+                          src={post.imageUrl}
                           alt="Post content"
                           className="w-full object-cover transition-smooth hover:scale-105"
                         />
@@ -120,59 +313,86 @@ export default function Feed() {
                   <Separator />
                   
                   <div className="flex items-center justify-around p-2">
-                    <Button variant="ghost" size="sm" className="gap-2 flex-1">
-                      <Heart className="h-4 w-4" />
-                      <span className="text-xs">{post.likes}</span>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className={`gap-2 flex-1 ${post.likes?.includes(currentUser.uid) ? 'text-red-500' : ''}`}
+                      onClick={() => handleLike(post)}
+                    >
+                      <Heart className={`h-4 w-4 ${post.likes?.includes(currentUser.uid) ? 'fill-red-500' : ''}`} />
+                      <span className="text-xs">{post.likeCount || 0}</span>
                     </Button>
-                    <Button variant="ghost" size="sm" className="gap-2 flex-1">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="gap-2 flex-1"
+                      onClick={() => openComments(post)}
+                    >
                       <MessageCircle className="h-4 w-4" />
-                      <span className="text-xs">{post.comments}</span>
+                      <span className="text-xs">{post.commentCount || 0}</span>
                     </Button>
                     <Button variant="ghost" size="sm" className="gap-2 flex-1">
                       <Share2 className="h-4 w-4" />
-                      <span className="text-xs">{post.shares}</span>
                     </Button>
                   </div>
                 </Card>
-              ))}
-            </div>
-
-            {/* Sidebar */}
-            <div className="hidden lg:block space-y-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
-              {/* Upcoming Events */}
-              <Card className="p-4 shadow-soft">
-                <h3 className="font-bold text-sm mb-4">Upcoming Campus Events</h3>
-                <div className="space-y-3">
-                  {upcomingEvents.map((event, i) => (
-                    <div key={i} className="flex gap-3">
-                      <div className="flex h-12 w-12 flex-col items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold whitespace-pre-line text-center leading-tight">
-                        {event.date}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-xs line-clamp-1">{event.title}</h4>
-                        <p className="text-xs text-muted-foreground">{event.time}</p>
-                        <p className="text-xs text-muted-foreground">{event.location}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              {/* Trending */}
-              <Card className="p-4 shadow-soft">
-                <h3 className="font-bold text-sm mb-4">Trending on Campus</h3>
-                <div className="space-y-2">
-                  {trending.map((tag) => (
-                    <Button key={tag} variant="ghost" className="w-full justify-start text-primary hover:bg-primary/10">
-                      {tag}
-                    </Button>
-                  ))}
-                </div>
-              </Card>
-            </div>
+              ))
+            )}
           </div>
         </main>
       </div>
+
+      <Dialog open={!!selectedPost} onOpenChange={() => setSelectedPost(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Comments</DialogTitle>
+          </DialogHeader>
+          {selectedPost && (
+            <div className="space-y-4">
+              <div className="flex gap-3 pb-4 border-b">
+                <Avatar>
+                  <AvatarImage src={selectedPost.authorAvatar} />
+                  <AvatarFallback>{selectedPost.authorName?.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-sm">{selectedPost.authorName}</h4>
+                  <p className="text-sm mt-1">{selectedPost.content}</p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                {comments.map(comment => (
+                  <div key={comment.id} className="flex gap-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={comment.authorAvatar} />
+                      <AvatarFallback className="text-xs">{comment.authorName?.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 bg-muted p-3 rounded-lg">
+                      <h5 className="font-semibold text-xs">{comment.authorName}</h5>
+                      <p className="text-sm mt-1">{comment.content}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {comment.createdAt && formatDistanceToNow(comment.createdAt.toDate(), { addSuffix: true })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2 pt-4 border-t">
+                <Textarea
+                  placeholder="Write a comment..."
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  className="min-h-[60px]"
+                />
+                <Button onClick={handleAddComment} disabled={!newComment.trim()}>
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

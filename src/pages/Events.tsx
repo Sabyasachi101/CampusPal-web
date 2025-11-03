@@ -1,34 +1,172 @@
+import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileNav } from "@/components/MobileNav";
 import { Header } from "@/components/Header";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Users, Plus } from "lucide-react";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { createEvent, getEvents, rsvpEvent, cancelRsvp, uploadImage, Event } from "@/lib/firebase-utils";
+import { useToast } from "@/hooks/use-toast";
+import { formatDistanceToNow, format } from "date-fns";
+import { Calendar, Clock, MapPin, Users, X, Image as ImageIcon, Plus } from "lucide-react";
 
-const events = [
-  {
-    id: 1,
-    title: "Annual Hackathon",
-    date: "Wed, Oct 26, 7:00 PM",
-    location: "Innovation Hall",
-    attendees: 128,
-    image: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&auto=format&fit=crop",
-    category: "Academic",
-  },
-  {
-    id: 2,
-    title: "Fall Music Fest",
-    date: "Sat, Oct 29, 2:00 PM",
-    location: "Main Quad",
-    attendees: 450,
-    image: "https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=800&auto=format&fit=crop",
-    category: "Social",
-  },
+const categories = [
+  { value: 'all', label: 'All Events' },
+  { value: 'fest', label: 'Fest' },
+  { value: 'workshop', label: 'Workshop' },
+  { value: 'webinar', label: 'Webinar' },
+  { value: 'club', label: 'Club' },
+  { value: 'competition', label: 'Competition' },
+  { value: 'other', label: 'Other' },
 ];
 
 export default function Events() {
+  const { currentUser, userProfile } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [events, setEvents] = useState<Event[]>([]);
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [loading, setLoading] = useState(false);
+  const [loadingEvents, setLoadingEvents] = useState(true);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+  
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    date: "",
+    time: "",
+    location: "",
+    category: 'other' as Event['category'],
+    maxAttendees: "",
+  });
+
+  useEffect(() => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    loadEvents();
+  }, [currentUser]);
+
+  async function loadEvents() {
+    setLoadingEvents(true);
+    try {
+      const fetchedEvents = await getEvents(50);
+      setEvents(fetchedEvents);
+    } catch (error) {
+      toast({ title: "Error loading events", variant: "destructive" });
+    } finally {
+      setLoadingEvents(false);
+    }
+  }
+
+  async function handleCreateEvent() {
+    if (!formData.title.trim() || !formData.date || !formData.time || !formData.location.trim()) {
+      toast({ title: "Please fill all required fields", variant: "destructive" });
+      return;
+    }
+    if (!currentUser || !userProfile) return;
+
+    setLoading(true);
+    try {
+      let imageUrl = undefined;
+      if (imageFile) {
+        imageUrl = await uploadImage(imageFile, 'events');
+      }
+
+      const eventDate = new Date(`${formData.date}T${formData.time}`);
+      const timestamp = { seconds: Math.floor(eventDate.getTime() / 1000), nanoseconds: 0 } as any;
+
+      await createEvent({
+        title: formData.title,
+        description: formData.description,
+        imageUrl,
+        date: timestamp,
+        time: formData.time,
+        location: formData.location,
+        category: formData.category,
+        organizerId: currentUser.uid,
+        organizerName: userProfile.displayName,
+        maxAttendees: formData.maxAttendees ? parseInt(formData.maxAttendees) : undefined,
+      });
+
+      setFormData({
+        title: "",
+        description: "",
+        date: "",
+        time: "",
+        location: "",
+        category: 'other',
+        maxAttendees: "",
+      });
+      setImageFile(null);
+      setImagePreview("");
+      setCreateDialogOpen(false);
+      toast({ title: "Event created successfully!" });
+      loadEvents();
+    } catch (error) {
+      toast({ title: "Error creating event", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRSVP(event: Event) {
+    if (!currentUser || !event.id) return;
+
+    const isRSVPed = event.attendees?.includes(currentUser.uid);
+    const isFull = event.maxAttendees && event.attendees?.length >= event.maxAttendees;
+
+    if (!isRSVPed && isFull) {
+      toast({ title: "Event is full", variant: "destructive" });
+      return;
+    }
+
+    try {
+      if (isRSVPed) {
+        await cancelRsvp(event.id, currentUser.uid);
+        toast({ title: "RSVP cancelled" });
+      } else {
+        await rsvpEvent(event.id, currentUser.uid);
+        toast({ title: "RSVP confirmed!" });
+      }
+      loadEvents();
+    } catch (error) {
+      toast({ title: "Error updating RSVP", variant: "destructive" });
+    }
+  }
+
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  }
+
+  const filteredEvents = filterCategory === 'all' 
+    ? events 
+    : events.filter(e => e.category === filterCategory);
+
+  const sortedEvents = [...filteredEvents].sort((a, b) => {
+    const dateA = a.date?.seconds || 0;
+    const dateB = b.date?.seconds || 0;
+    return dateA - dateB;
+  });
+
+  if (!currentUser) return null;
+
   return (
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
@@ -37,132 +175,259 @@ export default function Events() {
       <div className="lg:ml-64 flex-1">
         <Header />
         
-        <main className="p-4 sm:p-6 pb-20 lg:pb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-            {/* Events List */}
-            <div className="lg:col-span-2 space-y-4 sm:space-y-6 animate-slide-up">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div>
-                  <h1 className="text-2xl sm:text-3xl font-bold mb-2">Upcoming Events</h1>
-                  <p className="text-sm text-muted-foreground">Discover what's happening around campus.</p>
-                </div>
-                <Button className="gap-2 w-full sm:w-auto">
+        <main className="mx-auto max-w-6xl p-4 sm:p-6 pb-20 lg:pb-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold">Events</h1>
+              <p className="text-muted-foreground mt-1">Discover and join campus events</p>
+            </div>
+            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="gap-2">
                   <Plus className="h-4 w-4" />
-                  Create
+                  Create Event
                 </Button>
-              </div>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Create New Event</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="title">Title *</Label>
+                    <Input
+                      id="title"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      placeholder="Tech Fest 2024"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      placeholder="Join us for an exciting tech fest..."
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="date">Date *</Label>
+                      <Input
+                        id="date"
+                        type="date"
+                        value={formData.date}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="time">Time *</Label>
+                      <Input
+                        id="time"
+                        type="time"
+                        value={formData.time}
+                        onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="location">Location *</Label>
+                    <Input
+                      id="location"
+                      value={formData.location}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      placeholder="Main Auditorium"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="category">Category</Label>
+                      <Select 
+                        value={formData.category} 
+                        onValueChange={(val) => setFormData({ ...formData, category: val as Event['category'] })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.filter(c => c.value !== 'all').map(cat => (
+                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="maxAttendees">Max Attendees (Optional)</Label>
+                      <Input
+                        id="maxAttendees"
+                        type="number"
+                        value={formData.maxAttendees}
+                        onChange={(e) => setFormData({ ...formData, maxAttendees: e.target.value })}
+                        placeholder="100"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="image">Event Image (Optional)</Label>
+                    <div className="mt-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        id="event-image-upload"
+                        onChange={handleImageSelect}
+                      />
+                      <label htmlFor="event-image-upload">
+                        <Button variant="outline" size="sm" className="gap-2" asChild>
+                          <span>
+                            <ImageIcon className="h-4 w-4" />
+                            Upload Image
+                          </span>
+                        </Button>
+                      </label>
+                      {imagePreview && (
+                        <div className="relative mt-3">
+                          <img src={imagePreview} alt="Preview" className="max-h-48 rounded" />
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="absolute top-2 right-2"
+                            onClick={() => { setImageFile(null); setImagePreview(""); }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCreateEvent} disabled={loading}>
+                      {loading ? "Creating..." : "Create Event"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
 
-              <Tabs defaultValue="all" className="w-full">
-                <TabsList>
-                  <TabsTrigger value="all">All</TabsTrigger>
-                  <TabsTrigger value="academic">Academic</TabsTrigger>
-                  <TabsTrigger value="sports">Sports</TabsTrigger>
-                  <TabsTrigger value="social">Social</TabsTrigger>
-                </TabsList>
-              </Tabs>
+          <div className="mb-6">
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map(cat => (
+                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-              <div className="space-y-4">
-                {events.map((event, index) => (
-                  <Card
-                    key={event.id}
-                    className="overflow-hidden hover:shadow-medium transition-smooth cursor-pointer animate-scale-in"
-                    style={{ animationDelay: `${index * 100}ms` }}
+          {loadingEvents ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">Loading events...</p>
+            </div>
+          ) : sortedEvents.length === 0 ? (
+            <Card className="p-12 text-center">
+              <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-lg font-semibold mb-2">No events found</p>
+              <p className="text-muted-foreground mb-4">
+                {filterCategory === 'all' 
+                  ? "Be the first to create an event!" 
+                  : "No events in this category. Try another filter."}
+              </p>
+            </Card>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {sortedEvents.map((event, index) => {
+                const isRSVPed = event.attendees?.includes(currentUser.uid);
+                const attendeeCount = event.attendees?.length || 0;
+                const isFull = event.maxAttendees && attendeeCount >= event.maxAttendees;
+                const eventDate = event.date?.seconds 
+                  ? new Date(event.date.seconds * 1000) 
+                  : new Date();
+
+                return (
+                  <Card 
+                    key={event.id} 
+                    className="overflow-hidden shadow-soft hover:shadow-medium transition-smooth flex flex-col"
+                    style={{ animationDelay: `${index * 50}ms` }}
                   >
-                    <div className="md:flex">
-                      <div className="md:w-64 h-48 md:h-auto overflow-hidden">
-                        <img
-                          src={event.image}
+                    {event.imageUrl && (
+                      <div className="relative h-48 overflow-hidden">
+                        <img 
+                          src={event.imageUrl} 
                           alt={event.title}
                           className="w-full h-full object-cover transition-smooth hover:scale-105"
                         />
-                      </div>
-                      <div className="p-6 flex-1">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <Badge variant="secondary" className="mb-2">
-                              {event.category}
-                            </Badge>
-                            <h3 className="text-xl font-bold mb-2">{event.title}</h3>
-                          </div>
+                        <div className="absolute top-3 right-3">
+                          <Badge className="bg-background/90 text-foreground border">
+                            {categories.find(c => c.value === event.category)?.label}
+                          </Badge>
                         </div>
-                        <div className="space-y-2 text-sm text-muted-foreground mb-4">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
-                            <span>{event.date}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4" />
-                            <span>{event.location}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            <span>{event.attendees} attendees</span>
-                          </div>
-                        </div>
-                        <Button>View Details</Button>
                       </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </div>
-
-            {/* Event Details Sidebar */}
-            <div className="hidden lg:block space-y-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
-              <Card className="overflow-hidden shadow-soft">
-                <div className="h-48 overflow-hidden">
-                  <img
-                    src="https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&auto=format&fit=crop"
-                    alt="Annual Hackathon"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="p-6">
-                  <h3 className="text-xl font-bold mb-4">Annual Hackathon</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Organized by <span className="text-primary font-medium">Computer Science Club</span>
-                  </p>
-                  
-                  <div className="space-y-4 mb-6">
-                    <div>
-                      <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        Date & Time
-                      </h4>
-                      <p className="text-sm text-muted-foreground ml-6">
-                        Wednesday, October 26, 2024<br />
-                        7:00 PM - 9:00 PM
-                      </p>
-                    </div>
+                    )}
                     
-                    <div>
-                      <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <CardHeader>
+                      {!event.imageUrl && (
+                        <Badge className="w-fit mb-2">
+                          {categories.find(c => c.value === event.category)?.label}
+                        </Badge>
+                      )}
+                      <CardTitle className="text-xl">{event.title}</CardTitle>
+                      {event.description && (
+                        <CardDescription className="line-clamp-2">
+                          {event.description}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+
+                    <CardContent className="space-y-3 flex-1">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        <span>
+                          {format(eventDate, 'MMM dd, yyyy')} · {formatDistanceToNow(eventDate, { addSuffix: true })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="h-4 w-4" />
+                        <span>{event.time}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <MapPin className="h-4 w-4" />
-                        Location
-                      </h4>
-                      <p className="text-sm text-muted-foreground ml-6">
-                        Innovation Hall, Room 201<br />
-                        <Button variant="link" className="p-0 h-auto text-primary">
-                          View on map
-                        </Button>
+                        <span>{event.location}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Users className="h-4 w-4" />
+                        <span>
+                          {attendeeCount} {event.maxAttendees ? `/ ${event.maxAttendees}` : ''} attending
+                        </span>
+                      </div>
+                    </CardContent>
+
+                    <CardFooter className="flex flex-col gap-2">
+                      <Button 
+                        className="w-full"
+                        variant={isRSVPed ? "outline" : "default"}
+                        onClick={() => handleRSVP(event)}
+                        disabled={!isRSVPed && isFull}
+                      >
+                        {isRSVPed ? "Cancel RSVP" : isFull ? "Event Full" : "RSVP"}
+                      </Button>
+                      <p className="text-xs text-muted-foreground text-center">
+                        Organized by {event.organizerName}
                       </p>
-                    </div>
-                  </div>
-
-                  <div className="mb-6">
-                    <h4 className="font-semibold text-sm mb-2">About this event</h4>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      Join us for a 24-hour coding marathon where you can build amazing projects, 
-                      learn new skills, and network with fellow students and industry professionals. 
-                      Food, drinks, and prizes will be provided!
-                    </p>
-                  </div>
-
-                  <Button className="w-full">RSVP</Button>
-                </div>
-              </Card>
+                    </CardFooter>
+                  </Card>
+                );
+              })}
             </div>
-          </div>
+          )}
         </main>
       </div>
     </div>
