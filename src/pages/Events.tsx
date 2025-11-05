@@ -16,6 +16,7 @@ import { createEvent, getEvents, rsvpEvent, cancelRsvp, uploadImage, Event } fro
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow, format } from "date-fns";
 import { Calendar, Clock, MapPin, Users, X, Image as ImageIcon, Plus } from "lucide-react";
+import { Timestamp } from "firebase/firestore";
 
 const categories = [
   { value: 'all', label: 'All Events' },
@@ -70,55 +71,71 @@ export default function Events() {
   }
 
   async function handleCreateEvent() {
-    if (!formData.title.trim() || !formData.date || !formData.time || !formData.location.trim()) {
-      toast({ title: "Please fill all required fields", variant: "destructive" });
-      return;
-    }
-    if (!currentUser || !userProfile) return;
-
-    setLoading(true);
-    try {
-      let imageUrl = undefined;
-      if (imageFile) {
-        imageUrl = await uploadImage(imageFile, 'events');
-      }
-
-      const eventDate = new Date(`${formData.date}T${formData.time}`);
-      const timestamp = { seconds: Math.floor(eventDate.getTime() / 1000), nanoseconds: 0 } as any;
-
-      await createEvent({
-        title: formData.title,
-        description: formData.description,
-        imageUrl,
-        date: timestamp,
-        time: formData.time,
-        location: formData.location,
-        category: formData.category,
-        organizerId: currentUser.uid,
-        organizerName: userProfile.displayName,
-        maxAttendees: formData.maxAttendees ? parseInt(formData.maxAttendees) : undefined,
-      });
-
-      setFormData({
-        title: "",
-        description: "",
-        date: "",
-        time: "",
-        location: "",
-        category: 'other',
-        maxAttendees: "",
-      });
-      setImageFile(null);
-      setImagePreview("");
-      setCreateDialogOpen(false);
-      toast({ title: "Event created successfully!" });
-      loadEvents();
-    } catch (error) {
-      toast({ title: "Error creating event", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
+  if (!formData.title.trim() || !formData.date || !formData.time || !formData.location.trim()) {
+    toast({ title: "Please fill all required fields", variant: "destructive" });
+    return;
   }
+
+  if (!currentUser || !userProfile) return;
+
+  setLoading(true);
+  try {
+    // ✅ Always initialize imageUrl as null, not undefined
+    let imageUrl: string | null = null;
+
+    if (imageFile) {
+      imageUrl = await uploadImage(imageFile, "events");
+    }
+
+    // ✅ Use Firestore Timestamp directly instead of a fake object
+    const eventDate = new Date(`${formData.date}T${formData.time}`);
+    const timestamp = Timestamp.fromDate(eventDate);
+
+    // ✅ Always ensure maxAttendees is either number or null
+    const maxAttendees = formData.maxAttendees
+      ? parseInt(formData.maxAttendees)
+      : null;
+
+    // ✅ Make sure organizer fields exist safely
+    const organizerName =
+      userProfile.displayName || currentUser.displayName || "Anonymous";
+
+    await createEvent({
+      title: formData.title,
+      description: formData.description,
+      imageUrl,          // ✅ will be null, not undefined
+      date: timestamp,   // ✅ proper Firestore Timestamp
+      time: formData.time,
+      location: formData.location,
+      category: formData.category,
+      organizerId: currentUser.uid,
+      organizerName,
+      maxAttendees,      // ✅ will be number or null
+    });
+
+    // ✅ Reset form after successful creation
+    setFormData({
+      title: "",
+      description: "",
+      date: "",
+      time: "",
+      location: "",
+      category: "other",
+      maxAttendees: "",
+    });
+    setImageFile(null);
+    setImagePreview("");
+    setCreateDialogOpen(false);
+
+    toast({ title: "Event created successfully!" });
+    loadEvents();
+  } catch (error) {
+    console.error("❌ Error creating event:", error);
+    toast({ title: "Error creating event", variant: "destructive" });
+  } finally {
+    setLoading(false);
+  }
+}
 
   async function handleRSVP(event: Event) {
     if (!currentUser || !event.id) return;

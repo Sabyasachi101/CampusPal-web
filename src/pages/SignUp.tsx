@@ -7,6 +7,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { auth } from "../FirebaseConfig"; // ✅ Import firebase instance
+import { createUserProfile } from "@/utils/createUserProfile"; // ✅ Firestore helper
 
 export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
@@ -25,6 +27,7 @@ export default function SignUp() {
     }
   }, [currentUser, navigate]);
 
+  // ✅ Email/Password Signup (with Firestore profile creation)
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -40,16 +43,27 @@ export default function SignUp() {
 
     setLoading(true);
     try {
+      // Signup user
       await signup(email, password, fullName);
+
+      // ✅ Get current user
+      const user = auth.currentUser;
+      if (user) {
+        await createUserProfile({
+          ...user,
+          displayName: fullName,
+        });
+      }
+
       navigate("/feed");
     } catch (error: any) {
       console.error("Signup Error:", error);
       let errorMessage = "Failed to create account";
-      if (error.code === 'auth/email-already-in-use') {
+      if (error.code === "auth/email-already-in-use") {
         errorMessage = "Email already in use";
-      } else if (error.code === 'auth/invalid-email') {
+      } else if (error.code === "auth/invalid-email") {
         errorMessage = "Invalid email address";
-      } else if (error.code === 'auth/weak-password') {
+      } else if (error.code === "auth/weak-password") {
         errorMessage = "Password is too weak";
       }
       toast.error(errorMessage);
@@ -58,10 +72,15 @@ export default function SignUp() {
     }
   };
 
+  // ✅ Google Sign-Up (with Firestore profile creation)
   const handleGoogleSignUp = async () => {
     setLoading(true);
     try {
-      await loginWithGoogle();
+      const result = await loginWithGoogle();
+      const user = auth.currentUser;
+      if (user) {
+        await createUserProfile(user); // auto create Firestore doc
+      }
       navigate("/feed");
     } catch (error: any) {
       console.error("Google Signup Error:", error);

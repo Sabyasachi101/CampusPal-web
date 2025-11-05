@@ -7,6 +7,8 @@ import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { auth } from "../FirebaseConfig"; // ✅ import your Firebase instance
+import { createUserProfile } from "@/utils/createUserProfile"; // ✅ Firestore helper
 
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
@@ -22,10 +24,15 @@ export default function Login() {
     }
   }, [currentUser, navigate]);
 
+  // ✅ Google Login (with Firestore profile creation)
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      await loginWithGoogle();
+      const userCredential = await loginWithGoogle();
+      const user = auth.currentUser;
+      if (user) {
+        await createUserProfile(user); // ✅ Auto-create Firestore user doc
+      }
       navigate("/feed");
     } catch (error: any) {
       console.error("Google Sign-in Error:", error);
@@ -35,6 +42,7 @@ export default function Login() {
     }
   };
 
+  // Email/password login (unchanged)
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -44,13 +52,13 @@ export default function Login() {
     } catch (error: any) {
       console.error("Login Error:", error);
       let errorMessage = "Failed to login";
-      if (error.code === 'auth/user-not-found') {
+      if (error.code === "auth/user-not-found") {
         errorMessage = "No account found with this email";
-      } else if (error.code === 'auth/wrong-password') {
+      } else if (error.code === "auth/wrong-password") {
         errorMessage = "Incorrect password";
-      } else if (error.code === 'auth/invalid-email') {
+      } else if (error.code === "auth/invalid-email") {
         errorMessage = "Invalid email address";
-      } else if (error.code === 'auth/invalid-credential') {
+      } else if (error.code === "auth/invalid-credential") {
         errorMessage = "Invalid email or password";
       }
       toast.error(errorMessage);

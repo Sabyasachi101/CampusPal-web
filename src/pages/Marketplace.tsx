@@ -1,21 +1,21 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Sidebar } from '@/components/Sidebar';
-import { MobileNav } from '@/components/MobileNav';
-import { Header } from '@/components/Header';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Sidebar } from "@/components/Sidebar";
+import { MobileNav } from "@/components/MobileNav";
+import { Header } from "@/components/Header";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -23,155 +23,249 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, DollarSign, CheckCircle, MessageCircle, ImagePlus } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+} from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  createMarketplaceItem,
-  getMarketplaceItems,
-  uploadImage,
-  MarketplaceItem,
-} from '@/lib/firebase-utils';
-import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/FirebaseConfig';
+  Plus,
+  DollarSign,
+  CheckCircle,
+  MessageCircle,
+  ImagePlus,
+} from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc,
+  query,
+  where,
+  serverTimestamp,
+  CollectionReference,
+  DocumentData,
+} from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "@/FirebaseConfig";
 
+// ✅ Local type override for userProfile
+interface ExtendedUserProfile {
+  name?: string;
+  displayName?: string;
+  email?: string;
+  photoURL?: string;
+  department?: string;
+  year?: string;
+  bio?: string;
+  contact?: string;
+}
+
+// ✅ Marketplace item structure
+interface MarketplaceItem {
+  id?: string;
+  title: string;
+  description: string;
+  price: number;
+  imageUrl?: string;
+  category: "books" | "electronics" | "clothing" | "other";
+  condition: "new" | "like-new" | "good" | "fair";
+  sellerId: string;
+  sellerName: string;
+  sellerContact: string;
+  sold?: boolean;
+  createdAt?: any;
+}
+
+interface FormDataType {
+  title: string;
+  description: string;
+  price: string;
+  condition: MarketplaceItem["condition"];
+  category: MarketplaceItem["category"];
+  contact: string;
+}
+
+// ✅ Color coding for conditions
 const conditionColors = {
-  new: 'bg-green-500/10 text-green-500 border-green-500/20',
-  'like-new': 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  good: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-  fair: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
+  new: "bg-green-500/10 text-green-500 border-green-500/20",
+  "like-new": "bg-blue-500/10 text-blue-500 border-blue-500/20",
+  good: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+  fair: "bg-orange-500/10 text-orange-500 border-orange-500/20",
 };
 
 export default function Marketplace() {
   const { currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
   const [items, setItems] = useState<MarketplaceItem[]>([]);
-  const [category, setCategory] = useState<string>('all');
+  const [category, setCategory] = useState<"all" | MarketplaceItem["category"]>("all");
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    price: '',
-    condition: 'good' as 'new' | 'like-new' | 'good' | 'fair',
-    category: 'other' as 'books' | 'electronics' | 'clothing' | 'other',
-    contact: '',
-  });
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>('');
+  const [imagePreview, setImagePreview] = useState<string>("");
 
-  useEffect(() => {
-    if (!currentUser) {
-      navigate('/login');
-      return;
-    }
-    loadItems();
-  }, [currentUser, navigate, category]);
+  const [formData, setFormData] = useState<FormDataType>({
+    title: "",
+    description: "",
+    price: "",
+    condition: "good",
+    category: "other",
+    contact: "",
+  });
 
+  const profile = userProfile as ExtendedUserProfile | null;
+
+  // 🔹 Load items from Firestore
   async function loadItems() {
     try {
       setLoading(true);
-      const fetchedItems = await getMarketplaceItems(category === 'all' ? undefined : category);
-      setItems(fetchedItems);
-    } catch (error) {
+      const colRef: CollectionReference<DocumentData> = collection(db, "marketplace");
+
+      const q =
+        category === "all"
+          ? colRef
+          : query(colRef, where("category", "==", category));
+
+      const snapshot = await getDocs(q);
+      const fetched: MarketplaceItem[] = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as MarketplaceItem),
+      }));
+
+      setItems(fetched);
+    } catch (error: any) {
+      console.error("Error loading items:", error);
       toast({
-        title: 'Error loading items',
-        description: 'Please try again later',
-        variant: 'destructive',
+        title: "Error loading items",
+        description: error.message || "Please try again later",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   }
 
+  // 🔹 Upload image to Firebase Storage
+  async function uploadImage(file: File, folder: string): Promise<string> {
+    const storageRef = ref(storage, `${folder}/${Date.now()}-${file.name}`);
+    await uploadBytes(storageRef, file);
+    return await getDownloadURL(storageRef);
+  }
+
+  // 🔹 Handle image preview
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
       setImageFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
+      reader.onloadend = () => setImagePreview(reader.result as string);
       reader.readAsDataURL(file);
     }
   }
 
+  // 🔹 Submit form (create listing)
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!currentUser || !userProfile) return;
+
+    if (!currentUser) {
+      toast({ title: "You must be logged in to list items", variant: "destructive" });
+      return;
+    }
 
     try {
       setUploading(true);
-      let imageUrl = '';
+      let imageUrl = "";
 
       if (imageFile) {
-        imageUrl = await uploadImage(imageFile, 'marketplace');
+        imageUrl = await uploadImage(imageFile, "marketplace");
       }
 
-      await createMarketplaceItem({
-        title: formData.title,
-        description: formData.description,
+      const sellerName =
+        profile?.name ??
+        profile?.displayName ??
+        currentUser.displayName ??
+        currentUser.email?.split("@")[0] ??
+        "Anonymous";
+
+      const newItem: MarketplaceItem = {
+        title: formData.title.trim(),
+        description: formData.description.trim(),
         price: parseFloat(formData.price),
         imageUrl,
         category: formData.category,
         condition: formData.condition,
         sellerId: currentUser.uid,
-        sellerName: userProfile.displayName,
-        sellerContact: formData.contact,
-      });
+        sellerName,
+        sellerContact: formData.contact.trim(),
+        sold: false,
+        createdAt: serverTimestamp(),
+      };
+
+      await addDoc(collection(db, "marketplace"), newItem);
 
       toast({
-        title: 'Item listed successfully!',
-        description: 'Your item is now available in the marketplace',
+        title: "Item listed successfully!",
+        description: "Your item is now visible in the marketplace.",
       });
 
       setFormData({
-        title: '',
-        description: '',
-        price: '',
-        condition: 'good',
-        category: 'other',
-        contact: '',
+        title: "",
+        description: "",
+        price: "",
+        condition: "good",
+        category: "other",
+        contact: "",
       });
       setImageFile(null);
-      setImagePreview('');
+      setImagePreview("");
       setIsDialogOpen(false);
       loadItems();
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Error creating listing:", error);
       toast({
-        title: 'Error creating listing',
-        description: 'Please try again',
-        variant: 'destructive',
+        title: "Error creating listing",
+        description: error.message || "Please try again.",
+        variant: "destructive",
       });
     } finally {
       setUploading(false);
     }
   }
 
+  // 🔹 Mark item as sold
   async function markAsSold(itemId: string) {
     try {
-      await updateDoc(doc(db, 'marketplace', itemId), { sold: true });
-      toast({ title: 'Item marked as sold!' });
+      await updateDoc(doc(db, "marketplace", itemId), { sold: true });
+      toast({ title: "Item marked as sold!" });
       loadItems();
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Error updating item:", error);
       toast({
-        title: 'Error updating item',
-        variant: 'destructive',
+        title: "Error updating item",
+        description: error.message,
+        variant: "destructive",
       });
     }
   }
 
+  // 🔹 Contact seller
   function handleContact(sellerContact: string) {
     toast({
-      title: 'Contact Information',
-      description: sellerContact,
+      title: "Contact Seller",
+      description: sellerContact || "No contact info provided.",
     });
   }
+
+  useEffect(() => {
+    if (!currentUser) {
+      navigate("/login");
+      return;
+    }
+    loadItems();
+  }, [currentUser, category]);
 
   if (!currentUser) return null;
 
@@ -184,69 +278,80 @@ export default function Marketplace() {
         <Header />
 
         <main className="p-4 sm:p-6 pb-20 lg:pb-6">
-          <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Header Section */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-slide-up">
               <div>
-                <h1 className="text-2xl sm:text-3xl font-bold mb-2">Marketplace</h1>
-                <p className="text-sm text-muted-foreground">Buy and sell items with fellow students</p>
+                <h1 className="text-3xl font-bold mb-1">Marketplace</h1>
+                <p className="text-muted-foreground">
+                  Buy and sell items with fellow students
+                </p>
               </div>
+
+              {/* Create Listing */}
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="gap-2 w-full sm:w-auto">
-                    <Plus className="h-4 w-4" />
-                    Create Listing
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" /> Create Listing
                   </Button>
                 </DialogTrigger>
+
                 <DialogContent className="max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Create New Listing</DialogTitle>
-                    <DialogDescription>Add details about the item you want to sell</DialogDescription>
+                    <DialogDescription>
+                      Add details about your item for sale.
+                    </DialogDescription>
                   </DialogHeader>
+
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                      <Label htmlFor="title">Title</Label>
+                      <Label>Title</Label>
                       <Input
-                        id="title"
                         required
                         value={formData.title}
-                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                        placeholder="e.g., MacBook Pro 2020"
+                        onChange={(e) =>
+                          setFormData({ ...formData, title: e.target.value })
+                        }
+                        placeholder="e.g., MacBook Pro 2021"
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="description">Description</Label>
+                      <Label>Description</Label>
                       <Textarea
-                        id="description"
                         required
                         value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        placeholder="Describe the item, its condition, and any other details..."
-                        rows={4}
+                        onChange={(e) =>
+                          setFormData({ ...formData, description: e.target.value })
+                        }
+                        placeholder="Describe your item..."
                       />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="price">Price (₹)</Label>
+                        <Label>Price (₹)</Label>
                         <Input
-                          id="price"
-                          type="number"
                           required
+                          type="number"
                           min="0"
-                          step="0.01"
                           value={formData.price}
-                          onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                          placeholder="0.00"
+                          onChange={(e) =>
+                            setFormData({ ...formData, price: e.target.value })
+                          }
                         />
                       </div>
 
                       <div>
-                        <Label htmlFor="condition">Condition</Label>
+                        <Label>Condition</Label>
                         <Select
                           value={formData.condition}
-                          onValueChange={(value) =>
-                            setFormData({ ...formData, condition: value as typeof formData.condition })
+                          onValueChange={(v) =>
+                            setFormData({
+                              ...formData,
+                              condition: v as MarketplaceItem["condition"],
+                            })
                           }
                         >
                           <SelectTrigger>
@@ -263,11 +368,14 @@ export default function Marketplace() {
                     </div>
 
                     <div>
-                      <Label htmlFor="category">Category</Label>
+                      <Label>Category</Label>
                       <Select
                         value={formData.category}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, category: value as typeof formData.category })
+                        onValueChange={(v) =>
+                          setFormData({
+                            ...formData,
+                            category: v as MarketplaceItem["category"],
+                          })
                         }
                       >
                         <SelectTrigger>
@@ -283,18 +391,19 @@ export default function Marketplace() {
                     </div>
 
                     <div>
-                      <Label htmlFor="contact">Contact Information</Label>
+                      <Label>Contact Info</Label>
                       <Input
-                        id="contact"
                         required
                         value={formData.contact}
-                        onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
-                        placeholder="Phone number or email"
+                        onChange={(e) =>
+                          setFormData({ ...formData, contact: e.target.value })
+                        }
+                        placeholder="Phone or email"
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="image">Image</Label>
+                      <Label>Image</Label>
                       <div className="mt-2">
                         {imagePreview ? (
                           <div className="relative">
@@ -310,21 +419,19 @@ export default function Marketplace() {
                               className="absolute top-2 right-2"
                               onClick={() => {
                                 setImageFile(null);
-                                setImagePreview('');
+                                setImagePreview("");
                               }}
                             >
                               Remove
                             </Button>
                           </div>
                         ) : (
-                          <label
-                            htmlFor="image"
-                            className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-accent"
-                          >
+                          <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-accent">
                             <ImagePlus className="h-8 w-8 mb-2 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">Click to upload image</span>
+                            <span className="text-sm text-muted-foreground">
+                              Click to upload image
+                            </span>
                             <input
-                              id="image"
                               type="file"
                               accept="image/*"
                               className="hidden"
@@ -336,14 +443,21 @@ export default function Marketplace() {
                     </div>
 
                     <Button type="submit" className="w-full" disabled={uploading}>
-                      {uploading ? 'Creating...' : 'Create Listing'}
+                      {uploading ? "Creating..." : "Create Listing"}
                     </Button>
                   </form>
                 </DialogContent>
               </Dialog>
             </div>
 
-            <Tabs value={category} onValueChange={setCategory} className="w-full animate-slide-up">
+            {/* Category Tabs */}
+            <Tabs
+              value={category}
+              onValueChange={(v) =>
+                setCategory(v as "all" | MarketplaceItem["category"])
+              }
+              className="w-full"
+            >
               <TabsList>
                 <TabsTrigger value="all">All</TabsTrigger>
                 <TabsTrigger value="books">Books</TabsTrigger>
@@ -353,28 +467,25 @@ export default function Marketplace() {
               </TabsList>
             </Tabs>
 
+            {/* Item Grid */}
             {loading ? (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">Loading items...</p>
+              <div className="text-center py-12 text-muted-foreground">
+                Loading items...
               </div>
             ) : items.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">No items found in this category</p>
+              <div className="text-center py-12 text-muted-foreground">
+                No items found in this category
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-scale-in">
-                {items.map((item, index) => (
-                  <Card
-                    key={item.id}
-                    className="overflow-hidden hover:shadow-medium transition-smooth animate-scale-in"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    <div className="aspect-square overflow-hidden bg-muted">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {items.map((item) => (
+                  <Card key={item.id} className="overflow-hidden">
+                    <div className="aspect-square bg-muted overflow-hidden">
                       {item.imageUrl ? (
                         <img
                           src={item.imageUrl}
                           alt={item.title}
-                          className="w-full h-full object-cover transition-smooth hover:scale-105"
+                          className="w-full h-full object-cover"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
@@ -382,44 +493,44 @@ export default function Marketplace() {
                         </div>
                       )}
                     </div>
+
                     <div className="p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge variant="outline" className={conditionColors[item.condition]}>
-                              {item.condition}
-                            </Badge>
-                          </div>
-                          <h3 className="font-bold text-lg mb-1 line-clamp-1">{item.title}</h3>
-                          <div className="flex items-center gap-1 text-primary font-bold text-xl mb-2">
-                            <DollarSign className="h-5 w-5" />
-                            <span>₹{item.price.toFixed(2)}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{item.description}</p>
-                      <div className="text-xs text-muted-foreground mb-3">
-                        Seller: <span className="font-medium">{item.sellerName}</span>
-                      </div>
-                      <div className="flex gap-2">
+                      <Badge
+                        variant="outline"
+                        className={conditionColors[item.condition]}
+                      >
+                        {item.condition}
+                      </Badge>
+
+                      <h3 className="font-bold text-lg mt-2">{item.title}</h3>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {item.description}
+                      </p>
+
+                      <p className="text-primary font-semibold mt-2">
+                        ₹{item.price}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Seller: {item.sellerName}
+                      </p>
+
+                      <div className="flex gap-2 mt-3">
                         {currentUser.uid === item.sellerId ? (
                           <Button
                             size="sm"
-                            className="flex-1 gap-2"
                             variant="outline"
+                            className="flex-1"
                             onClick={() => markAsSold(item.id!)}
                           >
-                            <CheckCircle className="h-4 w-4" />
-                            Mark as Sold
+                            <CheckCircle className="h-4 w-4 mr-2" /> Mark Sold
                           </Button>
                         ) : (
                           <Button
                             size="sm"
-                            className="flex-1 gap-2"
+                            className="flex-1"
                             onClick={() => handleContact(item.sellerContact)}
                           >
-                            <MessageCircle className="h-4 w-4" />
-                            Contact Seller
+                            <MessageCircle className="h-4 w-4 mr-2" /> Contact
                           </Button>
                         )}
                       </div>

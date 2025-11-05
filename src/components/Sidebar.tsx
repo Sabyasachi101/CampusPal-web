@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { Home, MessageSquare, Calendar, User, Bell, Search, Users, Settings, ShoppingBag, BookOpen, FileSearch, UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
+import logo from '../../public/logo.png'
 
 const navigation = [
   { name: "Feed", href: "/feed", icon: Home },
@@ -27,7 +28,7 @@ export const Sidebar = () => {
         {/* Logo */}
         <div className="flex h-16 items-center gap-3 border-b border-border px-6">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <span className="text-lg font-bold">C</span>
+           <img src={logo} alt="CampusPal Logo" />
           </div>
           <span className="text-xl font-bold">CampusPal</span>
         </div>

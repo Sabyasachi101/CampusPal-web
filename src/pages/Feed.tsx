@@ -17,13 +17,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatDistanceToNow } from "date-fns";
 
 const categories = [
-  { value: 'all', label: 'All Posts' },
-  { value: 'academic', label: 'Academic' },
-  { value: 'events', label: 'Events' },
-  { value: 'clubs', label: 'Clubs' },
-  { value: 'lost-found', label: 'Lost & Found' },
-  { value: 'marketplace', label: 'Marketplace' },
-  { value: 'fun', label: 'Fun' },
+  { value: "all", label: "All Posts" },
+  { value: "academic", label: "Academic" },
+  { value: "events", label: "Events" },
+  { value: "clubs", label: "Clubs" },
+  { value: "lost-found", label: "Lost & Found" },
+  { value: "marketplace", label: "Marketplace" },
+  { value: "fun", label: "Fun" },
 ];
 
 export default function Feed() {
@@ -31,8 +31,8 @@ export default function Feed() {
   const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
   const [newPost, setNewPost] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<Post['category']>('fun');
-  const [filterCategory, setFilterCategory] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState<Post["category"]>("fun");
+  const [filterCategory, setFilterCategory] = useState("all");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -43,7 +43,7 @@ export default function Feed() {
 
   useEffect(() => {
     if (!currentUser) {
-      navigate('/login');
+      navigate("/login");
       return;
     }
     loadPosts();
@@ -52,7 +52,7 @@ export default function Feed() {
   async function loadPosts() {
     setLoadingPosts(true);
     try {
-      const fetchedPosts = await getPosts(filterCategory === 'all' ? undefined : filterCategory);
+      const fetchedPosts = await getPosts(filterCategory === "all" ? undefined : filterCategory);
       setPosts(fetchedPosts);
     } catch (error) {
       toast.error("Error loading posts");
@@ -62,65 +62,54 @@ export default function Feed() {
   }
 
   async function handleCreatePost() {
-    console.log("🚀 handleCreatePost called");
-    console.log("Text:", newPost);
-    console.log("Image:", imageFile);
-    console.log("Current User:", currentUser);
-    console.log("User Profile:", userProfile);
-
-    if (!newPost.trim() && !imageFile) {
-      toast.error("Please add some text or an image!");
-      return;
-    }
-    
-    if (!currentUser) {
-      toast.error("You must be logged in to post!");
-      navigate('/login');
-      return;
-    }
-
-    if (!userProfile) {
-      toast.error("Loading your profile... Please try again.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      console.log("⬆️ Starting post creation...");
-      let imageUrl = undefined;
-      
-      if (imageFile) {
-        console.log("📸 Uploading image...");
-        imageUrl = await uploadImage(imageFile, 'posts');
-        console.log("✅ Image uploaded:", imageUrl);
-      }
-
-      console.log("💾 Creating post in Firestore...");
-      await createPost({
-        authorId: currentUser.uid,
-        authorName: userProfile.displayName,
-        authorAvatar: userProfile.photoURL,
-        content: newPost,
-        imageUrl,
-        category: selectedCategory,
-      });
-
-      console.log("✅ Post created successfully!");
-      setNewPost("");
-      setImageFile(null);
-      setImagePreview("");
-      setSelectedCategory('fun');
-      toast.success("Post created!");
-      loadPosts();
-    } catch (error: any) {
-      console.error("❌ Error creating post:", error);
-      console.error("Error code:", error.code);
-      console.error("Error message:", error.message);
-      toast.error(`Failed to create post: ${error.message || 'Unknown error'}`);
-    } finally {
-      setLoading(false);
-    }
+  if (!newPost.trim() && !imageFile) {
+    toast.error("Please add some text or an image!");
+    return;
   }
+
+  if (!currentUser) {
+    toast.error("You must be logged in to post!");
+    navigate("/login");
+    return;
+  }
+
+  setLoading(true);
+  try {
+    // ✅ Always define a valid imageUrl (null if none)
+    let imageUrl: string | null = null;
+
+    if (imageFile) {
+      imageUrl = await uploadImage(imageFile, "posts");
+    }
+
+    const authorName =
+      userProfile?.displayName || currentUser.displayName || "Anonymous";
+    const authorAvatar =
+      userProfile?.photoURL || currentUser.photoURL || "";
+
+    await createPost({
+      authorId: currentUser.uid,
+      authorName,
+      authorAvatar,
+      content: newPost,
+      imageUrl, // ✅ now it's always string or null, never undefined
+      category: selectedCategory,
+    });
+
+    setNewPost("");
+    setImageFile(null);
+    setImagePreview("");
+    setSelectedCategory("fun");
+    toast.success("Post created!");
+    loadPosts();
+  } catch (error: any) {
+    console.error("❌ Error creating post:", error);
+    toast.error(`Failed to create post: ${error.message || "Unknown error"}`);
+  } finally {
+    setLoading(false);
+  }
+}
+
 
   async function handleLike(post: Post) {
     if (!currentUser || !post.id) return;
@@ -133,7 +122,7 @@ export default function Feed() {
         await likePost(post.id, currentUser.uid);
       }
       loadPosts();
-    } catch (error) {
+    } catch {
       toast.error("Error updating like");
     }
   }
@@ -157,21 +146,26 @@ export default function Feed() {
   }
 
   async function handleAddComment() {
-    if (!newComment.trim() || !selectedPost?.id || !currentUser || !userProfile) return;
+    if (!newComment.trim() || !selectedPost?.id || !currentUser) return;
+
+    const authorName =
+      userProfile?.displayName || currentUser.displayName || "Anonymous";
+    const authorAvatar =
+      userProfile?.photoURL || currentUser.photoURL || "";
 
     try {
       await addComment({
         postId: selectedPost.id,
         authorId: currentUser.uid,
-        authorName: userProfile.displayName,
-        authorAvatar: userProfile.photoURL,
+        authorName,
+        authorAvatar,
         content: newComment,
       });
       setNewComment("");
       const fetchedComments = await getComments(selectedPost.id);
       setComments(fetchedComments);
       loadPosts();
-    } catch (error) {
+    } catch {
       toast.error("Error adding comment");
     }
   }
@@ -182,10 +176,10 @@ export default function Feed() {
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
       <MobileNav />
-      
+
       <div className="lg:ml-64 flex-1">
         <Header />
-        
+
         <main className="mx-auto max-w-4xl p-4 sm:p-6 pb-20 lg:pb-6">
           <div className="mb-4">
             <Select value={filterCategory} onValueChange={setFilterCategory}>
@@ -193,8 +187,10 @@ export default function Feed() {
                 <SelectValue placeholder="Filter by category" />
               </SelectTrigger>
               <SelectContent>
-                {categories.map(cat => (
-                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -204,26 +200,39 @@ export default function Feed() {
             <Card className="p-4 shadow-soft hover:shadow-medium transition-smooth">
               <div className="flex gap-3">
                 <Avatar>
-                  <AvatarImage src={userProfile?.photoURL} />
+                  <AvatarImage src={userProfile?.photoURL || currentUser.photoURL} />
                   <AvatarFallback className="bg-primary text-primary-foreground">
-                    {userProfile?.displayName?.charAt(0) || 'U'}
+                    {userProfile?.displayName?.charAt(0) ||
+                      currentUser.displayName?.charAt(0) ||
+                      "U"}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
                   <Textarea
-                    placeholder={`What's on your mind, ${userProfile?.displayName}?`}
+                    placeholder={`What's on your mind, ${
+                      userProfile?.displayName ||
+                      currentUser.displayName ||
+                      "User"
+                    }?`}
                     value={newPost}
                     onChange={(e) => setNewPost(e.target.value)}
                     className="min-h-[80px] resize-none border-0 bg-muted/50 focus-visible:ring-1"
                   />
                   {imagePreview && (
                     <div className="relative mt-2">
-                      <img src={imagePreview} alt="Preview" className="max-h-48 rounded" />
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="max-h-48 rounded"
+                      />
                       <Button
                         size="sm"
                         variant="destructive"
                         className="absolute top-2 right-2"
-                        onClick={() => { setImageFile(null); setImagePreview(""); }}
+                        onClick={() => {
+                          setImageFile(null);
+                          setImagePreview("");
+                        }}
                       >
                         <X className="h-4 w-4" />
                       </Button>
@@ -246,19 +255,28 @@ export default function Feed() {
                           </span>
                         </Button>
                       </label>
-                      <Select value={selectedCategory} onValueChange={(val) => setSelectedCategory(val as Post['category'])}>
+                      <Select
+                        value={selectedCategory}
+                        onValueChange={(val) =>
+                          setSelectedCategory(val as Post["category"])
+                        }
+                      >
                         <SelectTrigger className="w-[140px] h-9">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {categories.filter(c => c.value !== 'all').map(cat => (
-                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                          ))}
+                          {categories
+                            .filter((c) => c.value !== "all")
+                            .map((cat) => (
+                              <SelectItem key={cat.value} value={cat.value}>
+                                {cat.label}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
-                    <Button 
-                      className="bg-primary hover:bg-primary/90" 
+                    <Button
+                      className="bg-primary hover:bg-primary/90"
                       onClick={handleCreatePost}
                       disabled={loading || (!newPost.trim() && !imageFile)}
                     >
@@ -273,32 +291,48 @@ export default function Feed() {
               <div className="text-center py-8">Loading posts...</div>
             ) : posts.length === 0 ? (
               <Card className="p-8 text-center">
-                <p className="text-muted-foreground">No posts yet. Be the first to post!</p>
+                <p className="text-muted-foreground">
+                  No posts yet. Be the first to post!
+                </p>
               </Card>
             ) : (
               posts.map((post, index) => (
-                <Card key={post.id} className="overflow-hidden shadow-soft hover:shadow-medium transition-smooth" style={{ animationDelay: `${index * 100}ms` }}>
+                <Card
+                  key={post.id}
+                  className="overflow-hidden shadow-soft hover:shadow-medium transition-smooth"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
                   <div className="p-4">
                     <div className="flex items-start gap-3">
                       <Avatar>
                         <AvatarImage src={post.authorAvatar} />
-                        <AvatarFallback>{post.authorName?.charAt(0) || 'U'}</AvatarFallback>
+                        <AvatarFallback>
+                          {post.authorName?.charAt(0) || "U"}
+                        </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h4 className="font-semibold text-sm">{post.authorName}</h4>
+                          <h4 className="font-semibold text-sm">
+                            {post.authorName}
+                          </h4>
                           <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                            {categories.find(c => c.value === post.category)?.label}
+                            {categories.find((c) => c.value === post.category)
+                              ?.label || "General"}
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {post.createdAt && formatDistanceToNow(post.createdAt.toDate(), { addSuffix: true })}
+                          {post.createdAt &&
+                            formatDistanceToNow(post.createdAt.toDate(), {
+                              addSuffix: true,
+                            })}
                         </p>
                       </div>
                     </div>
-                    
-                    <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
-                    
+
+                    <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap">
+                      {post.content}
+                    </p>
+
                     {post.imageUrl && (
                       <div className="mt-3 -mx-4 overflow-hidden">
                         <img
@@ -309,22 +343,32 @@ export default function Feed() {
                       </div>
                     )}
                   </div>
-                  
+
                   <Separator />
-                  
+
                   <div className="flex items-center justify-around p-2">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className={`gap-2 flex-1 ${post.likes?.includes(currentUser.uid) ? 'text-red-500' : ''}`}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={`gap-2 flex-1 ${
+                        post.likes?.includes(currentUser.uid)
+                          ? "text-red-500"
+                          : ""
+                      }`}
                       onClick={() => handleLike(post)}
                     >
-                      <Heart className={`h-4 w-4 ${post.likes?.includes(currentUser.uid) ? 'fill-red-500' : ''}`} />
+                      <Heart
+                        className={`h-4 w-4 ${
+                          post.likes?.includes(currentUser.uid)
+                            ? "fill-red-500"
+                            : ""
+                        }`}
+                      />
                       <span className="text-xs">{post.likeCount || 0}</span>
                     </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       className="gap-2 flex-1"
                       onClick={() => openComments(post)}
                     >
@@ -352,26 +396,37 @@ export default function Feed() {
               <div className="flex gap-3 pb-4 border-b">
                 <Avatar>
                   <AvatarImage src={selectedPost.authorAvatar} />
-                  <AvatarFallback>{selectedPost.authorName?.charAt(0)}</AvatarFallback>
+                  <AvatarFallback>
+                    {selectedPost.authorName?.charAt(0)}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
-                  <h4 className="font-semibold text-sm">{selectedPost.authorName}</h4>
+                  <h4 className="font-semibold text-sm">
+                    {selectedPost.authorName}
+                  </h4>
                   <p className="text-sm mt-1">{selectedPost.content}</p>
                 </div>
               </div>
-              
+
               <div className="space-y-3">
-                {comments.map(comment => (
+                {comments.map((comment) => (
                   <div key={comment.id} className="flex gap-3">
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={comment.authorAvatar} />
-                      <AvatarFallback className="text-xs">{comment.authorName?.charAt(0)}</AvatarFallback>
+                      <AvatarFallback className="text-xs">
+                        {comment.authorName?.charAt(0)}
+                      </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 bg-muted p-3 rounded-lg">
-                      <h5 className="font-semibold text-xs">{comment.authorName}</h5>
+                      <h5 className="font-semibold text-xs">
+                        {comment.authorName}
+                      </h5>
                       <p className="text-sm mt-1">{comment.content}</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {comment.createdAt && formatDistanceToNow(comment.createdAt.toDate(), { addSuffix: true })}
+                        {comment.createdAt &&
+                          formatDistanceToNow(comment.createdAt.toDate(), {
+                            addSuffix: true,
+                          })}
                       </p>
                     </div>
                   </div>

@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import logo from '../../public/logo.png';
 
 export const Header = () => {
   return (
@@ -11,7 +12,7 @@ export const Header = () => {
         {/* Logo - Mobile Only */}
         <div className="flex lg:hidden items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <span className="text-sm font-bold">C</span>
+            <img src={logo} alt="CampusPal Logo" />
           </div>
         </div>
 
