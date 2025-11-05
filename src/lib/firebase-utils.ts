@@ -34,6 +34,7 @@ export interface Post {
   likes?: string[];
   likeCount?: number;
   commentCount?: number;
+  hideLikes?: boolean;
   createdAt?: any;
 }
 
@@ -107,6 +108,33 @@ export interface LostFound {
   createdAt?: any;
 }
 
+export interface Notification {
+  id?: string;
+  recipientId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  type: "friend_request" | "like" | "comment" | "message";
+  message: string;
+  content?: string; // for comments or messages
+  postId?: string; // for likes and comments
+  requestId?: string; // for friend requests
+  read: boolean;
+  createdAt?: any;
+}
+
+export interface FriendRequest {
+  id?: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  recipientId: string;
+  recipientName: string;
+  recipientAvatar?: string;
+  status: "pending" | "accepted" | "declined";
+  createdAt?: any;
+}
+
 // ============================
 // 🔹 Helper: Upload Image to Storage
 // ============================
@@ -122,13 +150,14 @@ export async function uploadImage(file: File, folder: string): Promise<string> {
 // ============================
 
 export async function createPost(
-  post: Omit<Post, "id" | "createdAt" | "likes" | "likeCount" | "commentCount">
+  post: Omit<Post, "id" | "createdAt" | "likes" | "likeCount" | "commentCount" | "hideLikes">
 ) {
   const data = {
     ...post,
     likes: [],
     likeCount: 0,
     commentCount: 0,
+    hideLikes: false,
     createdAt: serverTimestamp(),
   };
   return await addDoc(collection(db, "posts"), data);
@@ -145,12 +174,29 @@ export async function getPosts(category?: string, limitCount = 20): Promise<Post
   return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Post) }));
 }
 
-export async function likePost(postId: string, userId: string) {
+export async function likePost(postId: string, userId: string, userName: string, userAvatar?: string) {
   const postRef = doc(db, "posts", postId);
   await updateDoc(postRef, {
     likes: arrayUnion(userId),
     likeCount: increment(1),
   });
+
+  // Get post author to create notification
+  const postSnap = await getDoc(postRef);
+  if (postSnap.exists()) {
+    const post = postSnap.data() as Post;
+    if (post.authorId !== userId) { // Don't notify if liking own post
+      await createNotification({
+        recipientId: post.authorId,
+        senderId: userId,
+        senderName: userName,
+        senderAvatar: userAvatar,
+        type: "like",
+        message: `liked your post.`,
+        postId: postId,
+      });
+    }
+  }
 }
 
 export async function unlikePost(postId: string, userId: string) {
@@ -159,6 +205,16 @@ export async function unlikePost(postId: string, userId: string) {
     likes: arrayRemove(userId),
     likeCount: increment(-1),
   });
+}
+
+export async function updatePost(postId: string, updates: Partial<Pick<Post, "content" | "imageUrl" | "category" | "hideLikes">>) {
+  const postRef = doc(db, "posts", postId);
+  await updateDoc(postRef, updates);
+}
+
+export async function deletePost(postId: string) {
+  const postRef = doc(db, "posts", postId);
+  await deleteDoc(postRef);
 }
 
 // ============================
@@ -172,6 +228,24 @@ export async function addComment(comment: Omit<Comment, "id" | "createdAt">) {
   // Increment comment count on post
   const postRef = doc(db, "posts", comment.postId);
   await updateDoc(postRef, { commentCount: increment(1) });
+
+  // Get post author to create notification
+  const postSnap = await getDoc(postRef);
+  if (postSnap.exists()) {
+    const post = postSnap.data() as Post;
+    if (post.authorId !== comment.authorId) { // Don't notify if commenting on own post
+      await createNotification({
+        recipientId: post.authorId,
+        senderId: comment.authorId,
+        senderName: comment.authorName,
+        senderAvatar: comment.authorAvatar,
+        type: "comment",
+        message: `commented: "${comment.content.length > 50 ? comment.content.substring(0, 50) + '...' : comment.content}"`,
+        content: comment.content,
+        postId: comment.postId,
+      });
+    }
+  }
 
   return commentRef;
 }
@@ -319,4 +393,86 @@ export async function getLostFoundItems(type?: "lost" | "found"): Promise<LostFo
 export async function markLostFoundResolved(itemId: string) {
   const refDoc = doc(db, "lostFound", itemId);
   await updateDoc(refDoc, { resolved: true });
+}
+
+// ============================
+// 🔹 FRIEND REQUESTS
+// ============================
+
+export async function sendFriendRequest(friendRequest: Omit<FriendRequest, "id" | "createdAt" | "status">) {
+  const data = { ...friendRequest, status: "pending", createdAt: serverTimestamp() };
+  const requestRef = await addDoc(collection(db, "friendRequests"), data);
+
+  // Create notification for friend request
+  await createNotification({
+    recipientId: friendRequest.recipientId,
+    senderId: friendRequest.senderId,
+    senderName: friendRequest.senderName,
+    senderAvatar: friendRequest.senderAvatar,
+    type: "friend_request",
+    message: "sent you a friend request.",
+    requestId: requestRef.id,
+  });
+
+  return requestRef;
+}
+
+export async function acceptFriendRequest(requestId: string) {
+  const requestRef = doc(db, "friendRequests", requestId);
+  await updateDoc(requestRef, { status: "accepted" });
+}
+
+export async function declineFriendRequest(requestId: string) {
+  const requestRef = doc(db, "friendRequests", requestId);
+  await updateDoc(requestRef, { status: "declined" });
+}
+
+export async function getFriendRequests(userId: string): Promise<FriendRequest[]> {
+  const q = query(
+    collection(db, "friendRequests"),
+    where("recipientId", "==", userId),
+    where("status", "==", "pending"),
+    orderBy("createdAt", "desc")
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as FriendRequest) }));
+}
+
+// ============================
+// 🔹 NOTIFICATIONS
+// ============================
+
+export async function createNotification(notification: Omit<Notification, "id" | "createdAt" | "read">) {
+  const data = { ...notification, read: false, createdAt: serverTimestamp() };
+  return await addDoc(collection(db, "notifications"), data);
+}
+
+export async function getNotifications(userId: string): Promise<Notification[]> {
+  const q = query(
+    collection(db, "notifications"),
+    where("recipientId", "==", userId),
+    orderBy("createdAt", "desc"),
+    limit(50)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Notification) }));
+}
+
+export async function markNotificationAsRead(notificationId: string) {
+  const notificationRef = doc(db, "notifications", notificationId);
+  await updateDoc(notificationRef, { read: true });
+}
+
+export async function markAllNotificationsAsRead(userId: string) {
+  const q = query(
+    collection(db, "notifications"),
+    where("recipientId", "==", userId),
+    where("read", "==", false)
+  );
+  const snapshot = await getDocs(q);
+  const batch = [];
+  for (const docSnap of snapshot.docs) {
+    batch.push(updateDoc(docSnap.ref, { read: true }));
+  }
+  await Promise.all(batch);
 }

@@ -1,12 +1,17 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { Home, MessageSquare, Calendar, User, Bell, Search, Users, Settings, ShoppingBag, BookOpen, FileSearch, UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { getNotifications } from "@/lib/firebase-utils";
+import { Badge } from "@/components/ui/badge";
 import logo from '../../public/logo.png'
 
 const navigation = [
   { name: "Feed", href: "/feed", icon: Home },
   { name: "Chat", href: "/chat", icon: MessageSquare },
   { name: "Events", href: "/events", icon: Calendar },
+  { name: "Notifications", href: "/notifications", icon: Bell },
   { name: "Directory", href: "/directory", icon: UsersRound },
   { name: "Marketplace", href: "/marketplace", icon: ShoppingBag },
   { name: "Study Corner", href: "/study-corner", icon: BookOpen },
@@ -21,6 +26,15 @@ const bottomNavigation = [
 
 export const Sidebar = () => {
   const location = useLocation();
+  const { currentUser } = useAuth();
+
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["notifications", currentUser?.uid],
+    queryFn: () => currentUser ? getNotifications(currentUser.uid) : [],
+    enabled: !!currentUser,
+  });
+
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <aside className="hidden lg:fixed lg:left-0 lg:top-0 lg:z-40 lg:h-screen lg:w-64 lg:flex bg-card border-r border-border transition-smooth animate-fade-in">
@@ -37,12 +51,14 @@ export const Sidebar = () => {
         <nav className="flex-1 space-y-1 px-3 py-4">
           {navigation.map((item) => {
             const isActive = location.pathname === item.href;
+            const showBadge = item.name === "Notifications" && unreadCount > 0 && currentUser;
+
             return (
               <NavLink
                 key={item.name}
                 to={item.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-smooth",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-smooth relative",
                   isActive
                     ? "bg-primary text-primary-foreground shadow-soft"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -50,6 +66,14 @@ export const Sidebar = () => {
               >
                 <item.icon className="h-5 w-5" />
                 <span>{item.name}</span>
+                {showBadge && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute right-2 top-2 h-4 w-4 flex items-center justify-center p-0 text-xs"
+                  >
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </Badge>
+                )}
               </NavLink>
             );
           })}

@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { sendFriendRequest } from "@/lib/firebase-utils";
 import { Search, UserPlus, Mail, Calendar, BookOpen } from "lucide-react";
 
 interface StudentProfile {
@@ -108,11 +109,29 @@ export default function Directory() {
         setFilteredStudents(filtered);
     }
 
-    function handleConnect(student: StudentProfile) {
-        toast({
-            title: "Connection request sent!",
-            description: `You've sent a connection request to ${student.displayName}`,
-        });
+    async function handleConnect(student: StudentProfile) {
+        if (!currentUser) return;
+
+        try {
+            await sendFriendRequest({
+                senderId: currentUser.uid,
+                senderName: currentUser.displayName || "Anonymous",
+                senderAvatar: currentUser.photoURL || undefined,
+                recipientId: student.uid,
+                recipientName: student.displayName,
+                recipientAvatar: student.photoURL,
+            });
+            toast({
+                title: "Friend request sent!",
+                description: `You've sent a friend request to ${student.displayName}`,
+            });
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to send friend request",
+                variant: "destructive",
+            });
+        }
     }
 
     if (!currentUser) return null;

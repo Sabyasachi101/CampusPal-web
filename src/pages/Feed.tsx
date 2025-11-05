@@ -6,14 +6,16 @@ import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, X } from "lucide-react";
+import { Heart, MessageCircle, Share2, Image as ImageIcon, Send, X, MoreVertical, Edit, Trash2, Eye, EyeOff } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { createPost, getPosts, likePost, unlikePost, uploadImage, Post, addComment, getComments, Comment } from "@/lib/firebase-utils";
+import { createPost, getPosts, likePost, unlikePost, uploadImage, Post, addComment, getComments, Comment, deletePost, updatePost } from "@/lib/firebase-utils";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { formatDistanceToNow } from "date-fns";
 
 const categories = [
@@ -40,6 +42,10 @@ export default function Feed() {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [postToDelete, setPostToDelete] = useState<Post | null>(null);
 
   useEffect(() => {
     if (!currentUser) {
@@ -119,7 +125,7 @@ export default function Feed() {
       if (isLiked) {
         await unlikePost(post.id, currentUser.uid);
       } else {
-        await likePost(post.id, currentUser.uid);
+        await likePost(post.id, currentUser.uid, currentUser.displayName || "Anonymous", currentUser.photoURL || undefined);
       }
       loadPosts();
     } catch {
@@ -167,6 +173,111 @@ export default function Feed() {
       loadPosts();
     } catch {
       toast.error("Error adding comment");
+    }
+  }
+
+  function startEditing(post: Post) {
+    setEditingPost(post);
+    setEditContent(post.content);
+  }
+
+  async function handleEditPost() {
+    if (!editingPost?.id || !editContent.trim()) return;
+
+    try {
+      await updatePost(editingPost.id, { content: editContent });
+      setEditingPost(null);
+      setEditContent("");
+      loadPosts();
+      toast.success("Post updated!");
+    } catch {
+      toast.error("Error updating post");
+    }
+  }
+
+  function handleDeletePost(post: Post) {
+    setPostToDelete(post);
+    setDeleteDialogOpen(true);
+  }
+
+  async function confirmDeletePost() {
+    if (!postToDelete?.id) return;
+
+    try {
+      await deletePost(postToDelete.id);
+      setDeleteDialogOpen(false);
+      setPostToDelete(null);
+      loadPosts();
+      toast.success("Post deleted!");
+    } catch {
+      toast.error("Error deleting post");
+    }
+  }
+
+  async function toggleHideLikes(post: Post) {
+    if (!post.id) return;
+
+    try {
+      await updatePost(post.id, { hideLikes: !post.hideLikes });
+      loadPosts();
+    } catch {
+      toast.error("Error updating post");
+    }
+  }
+
+  function handleShare(post: Post) {
+    const postUrl = `${window.location.origin}/post/${post.id}`;
+    const text = `Check out this post: ${post.content.substring(0, 100)}${post.content.length > 100 ? '...' : ''}`;
+
+    if (navigator.share) {
+      navigator.share({
+        title: 'CampusPal Post',
+        text: text,
+        url: postUrl,
+      });
+    } else {
+      // Fallback for browsers that don't support Web Share API
+      const shareOptions = [
+        {
+          name: 'WhatsApp',
+          url: `https://wa.me/?text=${encodeURIComponent(text + ' ' + postUrl)}`
+        },
+        {
+          name: 'Facebook',
+          url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(postUrl)}`
+        },
+        {
+          name: 'Instagram (copy link)',
+          action: () => {
+            navigator.clipboard.writeText(postUrl);
+            toast.success('Link copied to clipboard!');
+          }
+        },
+        {
+          name: 'SMS',
+          url: `sms:?body=${encodeURIComponent(text + ' ' + postUrl)}`
+        },
+        {
+          name: 'Copy Link',
+          action: () => {
+            navigator.clipboard.writeText(postUrl);
+            toast.success('Link copied to clipboard!');
+          }
+        }
+      ];
+
+      // Create a simple share menu using alert or console for now
+      const choice = window.prompt('Choose how to share:', shareOptions.map((opt, i) => `${i + 1}. ${opt.name}`).join('\n'));
+      if (choice) {
+        const index = parseInt(choice) - 1;
+        if (shareOptions[index]) {
+          if (shareOptions[index].action) {
+            shareOptions[index].action();
+          } else {
+            window.open(shareOptions[index].url, '_blank');
+          }
+        }
+      }
     }
   }
 
@@ -312,13 +423,43 @@ export default function Feed() {
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h4 className="font-semibold text-sm">
+                        <h4 className="font-semibold text-sm">
                             {post.authorName}
                           </h4>
                           <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                             {categories.find((c) => c.value === post.category)
                               ?.label || "General"}
                           </span>
+                          {post.authorId === currentUser.uid && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => startEditing(post)}>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuCheckboxItem
+                                  checked={post.hideLikes || false}
+                                  onCheckedChange={() => toggleHideLikes(post)}
+                                >
+                                  {post.hideLikes ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                                  Hide like count
+                                </DropdownMenuCheckboxItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleDeletePost(post)}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {post.createdAt &&
@@ -329,9 +470,34 @@ export default function Feed() {
                       </div>
                     </div>
 
-                    <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap">
-                      {post.content}
-                    </p>
+                    {editingPost?.id === post.id ? (
+                    <div className="mt-3 space-y-2">
+                        <Textarea
+                           value={editContent}
+                           onChange={(e) => setEditContent(e.target.value)}
+                           className="min-h-[60px] resize-none"
+                         />
+                         <div className="flex gap-2">
+                           <Button size="sm" onClick={handleEditPost} disabled={!editContent.trim()}>
+                             Save
+                           </Button>
+                           <Button
+                             size="sm"
+                             variant="outline"
+                             onClick={() => {
+                               setEditingPost(null);
+                               setEditContent("");
+                             }}
+                           >
+                             Cancel
+                           </Button>
+                         </div>
+                       </div>
+                     ) : (
+                       <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap">
+                         {post.content}
+                       </p>
+                     )}
 
                     {post.imageUrl && (
                       <div className="mt-3 -mx-4 overflow-hidden">
@@ -348,23 +514,23 @@ export default function Feed() {
 
                   <div className="flex items-center justify-around p-2">
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      className={`gap-2 flex-1 ${
-                        post.likes?.includes(currentUser.uid)
-                          ? "text-red-500"
-                          : ""
-                      }`}
-                      onClick={() => handleLike(post)}
+                    variant="ghost"
+                    size="sm"
+                    className={`gap-2 flex-1 ${
+                    post.likes?.includes(currentUser.uid)
+                    ? "text-red-500"
+                    : ""
+                    }`}
+                    onClick={() => handleLike(post)}
                     >
-                      <Heart
-                        className={`h-4 w-4 ${
-                          post.likes?.includes(currentUser.uid)
-                            ? "fill-red-500"
-                            : ""
-                        }`}
-                      />
-                      <span className="text-xs">{post.likeCount || 0}</span>
+                    <Heart
+                    className={`h-4 w-4 ${
+                    post.likes?.includes(currentUser.uid)
+                    ? "fill-red-500"
+                    : ""
+                    }`}
+                    />
+                    {!post.hideLikes && <span className="text-xs">{post.likeCount || 0}</span>}
                     </Button>
                     <Button
                       variant="ghost"
@@ -375,8 +541,8 @@ export default function Feed() {
                       <MessageCircle className="h-4 w-4" />
                       <span className="text-xs">{post.commentCount || 0}</span>
                     </Button>
-                    <Button variant="ghost" size="sm" className="gap-2 flex-1">
-                      <Share2 className="h-4 w-4" />
+                    <Button variant="ghost" size="sm" className="gap-2 flex-1" onClick={() => handleShare(post)}>
+                    <Share2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </Card>
@@ -448,6 +614,23 @@ export default function Feed() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Post</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this post? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeletePost} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
