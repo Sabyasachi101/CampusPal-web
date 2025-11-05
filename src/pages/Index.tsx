@@ -2,6 +2,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Link } from "react-router-dom";
 import { MessageSquare, Calendar, Users } from "lucide-react";
+import Tiet from '../../public/Tiet.jpg'
+import logo from '../../public/logo.png'
 
 export default function Index() {
   return (
@@ -10,9 +12,9 @@ export default function Index() {
       <header className="border-b border-white/10 bg-[#1a202c]/50 backdrop-blur animate-fade-in">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <span className="text-xl font-bold">C</span>
-            </div>
+            
+              <img className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground" src={logo} alt="Logo" />
+            
             <span className="text-xl font-bold text-white">CampusPal</span>
           </div>
           <Link to="/login">
@@ -50,7 +52,7 @@ export default function Index() {
           </div>
           
           <div className="relative animate-scale-in" style={{ animationDelay: '200ms' }}>
-            <div className="aspect-[4/3] rounded-2xl gradient-hero shadow-hover" />
+            <img className="aspect-[4/3] rounded-2xl gradient-hero shadow-hover" src={Tiet} alt="TIET image" />
           </div>
         </div>
       </section>
@@ -115,7 +117,7 @@ export default function Index() {
             </div>
           </div>
           <div className="text-center text-sm text-gray-400 mt-6">
-            © 2024 CampusPal. All rights reserved.
+            © 2025 CampusPal. All rights reserved.
           </div>
         </div>
       </footer>

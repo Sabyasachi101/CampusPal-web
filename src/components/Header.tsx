@@ -11,9 +11,9 @@ export const Header = () => {
       <div className="flex h-16 items-center gap-2 sm:gap-4 px-4 sm:px-6">
         {/* Logo - Mobile Only */}
         <div className="flex lg:hidden items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <img src={logo} alt="CampusPal Logo" />
-          </div>
+         
+            <img className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"src={logo} alt="CampusPal Logo" />
+          
         </div>
 
         {/* Search */}
