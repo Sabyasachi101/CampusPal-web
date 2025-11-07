@@ -46,10 +46,30 @@ import {
   CollectionReference,
   DocumentData,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/FirebaseConfig";
+import { db } from "@/FirebaseConfig";
+import { supabase } from "@/SupabaseConfig";
 
-// ✅ Local type override for userProfile
+// ✅ Supabase upload utility
+async function uploadImageToSupabase(file: File, folder: string): Promise<string> {
+  const safeFileName = file.name.replace(/[^\w.-]/g, "_");
+  const filePath = `${folder}/${Date.now()}_${safeFileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("study-materials") // ⚡ your public bucket
+    .upload(filePath, file);
+
+  if (uploadError) throw uploadError;
+
+  const { data } = supabase.storage
+    .from("study-materials")
+    .getPublicUrl(filePath);
+
+  if (!data?.publicUrl) throw new Error("Failed to get public URL");
+
+  return data.publicUrl;
+}
+
+// ✅ Type definitions
 interface ExtendedUserProfile {
   name?: string;
   displayName?: string;
@@ -61,7 +81,6 @@ interface ExtendedUserProfile {
   contact?: string;
 }
 
-// ✅ Marketplace item structure
 interface MarketplaceItem {
   id?: string;
   title: string;
@@ -86,7 +105,6 @@ interface FormDataType {
   contact: string;
 }
 
-// ✅ Color coding for conditions
 const conditionColors = {
   new: "bg-green-500/10 text-green-500 border-green-500/20",
   "like-new": "bg-blue-500/10 text-blue-500 border-blue-500/20",
@@ -118,23 +136,17 @@ export default function Marketplace() {
 
   const profile = userProfile as ExtendedUserProfile | null;
 
-  // 🔹 Load items from Firestore
+  // 🔹 Load listings
   async function loadItems() {
     try {
       setLoading(true);
       const colRef: CollectionReference<DocumentData> = collection(db, "marketplace");
-
-      const q =
-        category === "all"
-          ? colRef
-          : query(colRef, where("category", "==", category));
-
+      const q = category === "all" ? colRef : query(colRef, where("category", "==", category));
       const snapshot = await getDocs(q);
       const fetched: MarketplaceItem[] = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...(doc.data() as MarketplaceItem),
       }));
-
       setItems(fetched);
     } catch (error: any) {
       console.error("Error loading items:", error);
@@ -148,14 +160,7 @@ export default function Marketplace() {
     }
   }
 
-  // 🔹 Upload image to Firebase Storage
-  async function uploadImage(file: File, folder: string): Promise<string> {
-    const storageRef = ref(storage, `${folder}/${Date.now()}-${file.name}`);
-    await uploadBytes(storageRef, file);
-    return await getDownloadURL(storageRef);
-  }
-
-  // 🔹 Handle image preview
+  // 🔹 Image preview
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
@@ -166,7 +171,7 @@ export default function Marketplace() {
     }
   }
 
-  // 🔹 Submit form (create listing)
+  // 🔹 Submit listing
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -180,7 +185,7 @@ export default function Marketplace() {
       let imageUrl = "";
 
       if (imageFile) {
-        imageUrl = await uploadImage(imageFile, "marketplace");
+        imageUrl = await uploadImageToSupabase(imageFile, "marketplace");
       }
 
       const sellerName =
@@ -205,11 +210,7 @@ export default function Marketplace() {
       };
 
       await addDoc(collection(db, "marketplace"), newItem);
-
-      toast({
-        title: "Item listed successfully!",
-        description: "Your item is now visible in the marketplace.",
-      });
+      toast({ title: "Item listed successfully!" });
 
       setFormData({
         title: "",
@@ -242,7 +243,6 @@ export default function Marketplace() {
       toast({ title: "Item marked as sold!" });
       loadItems();
     } catch (error: any) {
-      console.error("Error updating item:", error);
       toast({
         title: "Error updating item",
         description: error.message,
@@ -252,10 +252,10 @@ export default function Marketplace() {
   }
 
   // 🔹 Contact seller
-  function handleContact(sellerContact: string) {
+  function handleContact(contact: string) {
     toast({
       title: "Contact Seller",
-      description: sellerContact || "No contact info provided.",
+      description: contact || "No contact info provided.",
     });
   }
 
@@ -279,16 +279,14 @@ export default function Marketplace() {
 
         <main className="p-4 sm:p-6 pb-20 lg:pb-6">
           <div className="max-w-7xl mx-auto space-y-6">
-            {/* Header Section */}
+            {/* Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-slide-up">
               <div>
                 <h1 className="text-3xl font-bold mb-1">Marketplace</h1>
-                <p className="text-muted-foreground">
-                  Buy and sell items with fellow students
-                </p>
+                <p className="text-muted-foreground">Buy and sell items with fellow students</p>
               </div>
 
-              {/* Create Listing */}
+              {/* Dialog for new listing */}
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="gap-2">
@@ -299,9 +297,7 @@ export default function Marketplace() {
                 <DialogContent className="max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Create New Listing</DialogTitle>
-                    <DialogDescription>
-                      Add details about your item for sale.
-                    </DialogDescription>
+                    <DialogDescription>Add details about your item for sale.</DialogDescription>
                   </DialogHeader>
 
                   <form onSubmit={handleSubmit} className="space-y-4">
@@ -310,9 +306,7 @@ export default function Marketplace() {
                       <Input
                         required
                         value={formData.title}
-                        onChange={(e) =>
-                          setFormData({ ...formData, title: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                         placeholder="e.g., MacBook Pro 2021"
                       />
                     </div>
@@ -322,9 +316,7 @@ export default function Marketplace() {
                       <Textarea
                         required
                         value={formData.description}
-                        onChange={(e) =>
-                          setFormData({ ...formData, description: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                         placeholder="Describe your item..."
                       />
                     </div>
@@ -337,9 +329,7 @@ export default function Marketplace() {
                           type="number"
                           min="0"
                           value={formData.price}
-                          onChange={(e) =>
-                            setFormData({ ...formData, price: e.target.value })
-                          }
+                          onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                         />
                       </div>
 
@@ -348,10 +338,7 @@ export default function Marketplace() {
                         <Select
                           value={formData.condition}
                           onValueChange={(v) =>
-                            setFormData({
-                              ...formData,
-                              condition: v as MarketplaceItem["condition"],
-                            })
+                            setFormData({ ...formData, condition: v as MarketplaceItem["condition"] })
                           }
                         >
                           <SelectTrigger>
@@ -372,10 +359,7 @@ export default function Marketplace() {
                       <Select
                         value={formData.category}
                         onValueChange={(v) =>
-                          setFormData({
-                            ...formData,
-                            category: v as MarketplaceItem["category"],
-                          })
+                          setFormData({ ...formData, category: v as MarketplaceItem["category"] })
                         }
                       >
                         <SelectTrigger>
@@ -395,9 +379,7 @@ export default function Marketplace() {
                       <Input
                         required
                         value={formData.contact}
-                        onChange={(e) =>
-                          setFormData({ ...formData, contact: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
                         placeholder="Phone or email"
                       />
                     </div>
@@ -407,11 +389,7 @@ export default function Marketplace() {
                       <div className="mt-2">
                         {imagePreview ? (
                           <div className="relative">
-                            <img
-                              src={imagePreview}
-                              alt="Preview"
-                              className="w-full h-48 object-cover rounded-lg"
-                            />
+                            <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover rounded-lg" />
                             <Button
                               type="button"
                               variant="secondary"
@@ -450,12 +428,10 @@ export default function Marketplace() {
               </Dialog>
             </div>
 
-            {/* Category Tabs */}
+            {/* Tabs */}
             <Tabs
               value={category}
-              onValueChange={(v) =>
-                setCategory(v as "all" | MarketplaceItem["category"])
-              }
+              onValueChange={(v) => setCategory(v as "all" | MarketplaceItem["category"])}
               className="w-full"
             >
               <TabsList>
@@ -467,26 +443,18 @@ export default function Marketplace() {
               </TabsList>
             </Tabs>
 
-            {/* Item Grid */}
+            {/* Items */}
             {loading ? (
-              <div className="text-center py-12 text-muted-foreground">
-                Loading items...
-              </div>
+              <div className="text-center py-12 text-muted-foreground">Loading items...</div>
             ) : items.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                No items found in this category
-              </div>
+              <div className="text-center py-12 text-muted-foreground">No items found</div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {items.map((item) => (
                   <Card key={item.id} className="overflow-hidden">
                     <div className="aspect-square bg-muted overflow-hidden">
                       {item.imageUrl ? (
-                        <img
-                          src={item.imageUrl}
-                          alt={item.title}
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <ImagePlus className="h-12 w-12 text-muted-foreground" />
@@ -495,24 +463,15 @@ export default function Marketplace() {
                     </div>
 
                     <div className="p-4">
-                      <Badge
-                        variant="outline"
-                        className={conditionColors[item.condition]}
-                      >
+                      <Badge variant="outline" className={conditionColors[item.condition]}>
                         {item.condition}
                       </Badge>
-
                       <h3 className="font-bold text-lg mt-2">{item.title}</h3>
                       <p className="text-sm text-muted-foreground line-clamp-2">
                         {item.description}
                       </p>
-
-                      <p className="text-primary font-semibold mt-2">
-                        ₹{item.price}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Seller: {item.sellerName}
-                      </p>
+                      <p className="text-primary font-semibold mt-2">₹{item.price}</p>
+                      <p className="text-xs text-muted-foreground">Seller: {item.sellerName}</p>
 
                       <div className="flex gap-2 mt-3">
                         {currentUser.uid === item.sellerId ? (
