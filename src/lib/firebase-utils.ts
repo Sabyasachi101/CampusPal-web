@@ -137,6 +137,40 @@ export interface FriendRequest {
   createdAt?: any;
 }
 
+export interface Chat {
+  id?: string;
+  type: "direct" | "group";
+  name?: string; // For group chats
+  description?: string; // For group chats
+  avatar?: string; // For group chats
+  participants: string[]; // User IDs
+  participantDetails?: { id: string; name: string; avatar?: string }[]; // For quick access
+  createdBy: string;
+  createdAt?: any;
+  lastMessage?: {
+    text: string;
+    senderId: string;
+    senderName: string;
+    timestamp: any;
+  };
+  unreadCount?: { [userId: string]: number };
+}
+
+export interface ChatMessage {
+  id?: string;
+  chatId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  content: string;
+  type: "text" | "image" | "file";
+  fileUrl?: string;
+  fileName?: string;
+  createdAt?: any;
+  editedAt?: any;
+  replyTo?: string; // Message ID being replied to
+}
+
 // ============================
 // 🔹 Helper: Upload Image to Storage
 // ============================
@@ -166,14 +200,32 @@ export async function createPost(
 }
 
 export async function getPosts(category?: string, limitCount = 20): Promise<Post[]> {
-  const postsRef = collection(db, "posts");
-  const q =
-    category && category !== "all"
-      ? query(postsRef, where("category", "==", category), orderBy("createdAt", "desc"), limit(limitCount))
-      : query(postsRef, orderBy("createdAt", "desc"), limit(limitCount));
+const postsRef = collection(db, "posts");
 
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Post) }));
+if (category && category !== "all") {
+try {
+const q = query(postsRef, where("category", "==", category), orderBy("createdAt", "desc"), limit(limitCount));
+      const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Post) }));
+  } catch (error: any) {
+      console.warn("Composite index error in getPosts, falling back to unordered fetch:", error);
+      const q = query(postsRef, where("category", "==", category));
+      const snapshot = await getDocs(q);
+      const posts = snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Post) }));
+      // Sort in memory by createdAt desc and limit
+      return posts
+        .sort((a, b) => {
+          const aTime = a.createdAt?.toDate?.() || new Date(0);
+          const bTime = b.createdAt?.toDate?.() || new Date(0);
+          return bTime.getTime() - aTime.getTime(); // Descending
+        })
+        .slice(0, limitCount);
+    }
+  } else {
+    const q = query(postsRef, orderBy("createdAt", "desc"), limit(limitCount));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Post) }));
+  }
 }
 
 export async function likePost(postId: string, userId: string, userName: string, userAvatar?: string) {
@@ -224,7 +276,12 @@ export async function deletePost(postId: string) {
 // ============================
 
 export async function addComment(comment: Omit<Comment, "id" | "createdAt">) {
-  const data = { ...comment, createdAt: serverTimestamp() };
+// Clean the data - remove undefined values (Firestore doesn't accept them)
+const cleanComment = Object.fromEntries(
+    Object.entries(comment).filter(([_, value]) => value !== undefined)
+  );
+
+  const data = { ...cleanComment, createdAt: serverTimestamp() };
   const commentRef = await addDoc(collection(db, "comments"), data);
 
   // Increment comment count on post
@@ -253,19 +310,60 @@ export async function addComment(comment: Omit<Comment, "id" | "createdAt">) {
 }
 
 export async function getComments(postId: string): Promise<Comment[]> {
-  const q = query(
-    collection(db, "comments"),
-    where("postId", "==", postId),
+try {
+const q = query(
+  collection(db, "comments"),
+  where("postId", "==", postId),
     orderBy("createdAt", "asc")
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Comment) }));
+    return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Comment) }));
+  } catch (error: any) {
+    // If composite index error, fallback to fetching without ordering
+    console.warn("Composite index error, falling back to unordered fetch:", error);
+    const q = query(
+      collection(db, "comments"),
+      where("postId", "==", postId)
+    );
+    const snapshot = await getDocs(q);
+    const comments = snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Comment) }));
+    // Sort in memory by createdAt
+    return comments.sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || new Date(0);
+      const bTime = b.createdAt?.toDate?.() || new Date(0);
+      return aTime.getTime() - bTime.getTime();
+    });
+  }
+}
+
+export async function updateComment(commentId: string, updates: Partial<Pick<Comment, "content">>) {
+  const commentRef = doc(db, "comments", commentId);
+  await updateDoc(commentRef, updates);
+}
+
+export async function deleteComment(commentId: string) {
+  const commentRef = doc(db, "comments", commentId);
+
+  // Get comment data to decrement comment count on post
+  const commentSnap = await getDoc(commentRef);
+  if (commentSnap.exists()) {
+    const comment = commentSnap.data() as Comment;
+    const postRef = doc(db, "posts", comment.postId);
+    await updateDoc(postRef, { commentCount: increment(-1) });
+  }
+
+  await deleteDoc(commentRef);
 }
 
 // Event Comments
 export async function addEventComment(eventId: string, comment: Omit<Comment, "id" | "createdAt" | "postId">) {
-  try {
-    const data = { ...comment, postId: eventId, createdAt: serverTimestamp() };
+try {
+// Clean the data - remove undefined values (Firestore doesn't accept them)
+const cleanComment = Object.fromEntries(
+      Object.entries(comment).filter(([_, value]) => value !== undefined)
+    );
+
+    const data = { ...cleanComment, postId: eventId, createdAt: serverTimestamp() };
     const commentRef = await addDoc(collection(db, "comments"), data);
 
     // Get event data for comment count update and notification
@@ -301,17 +399,33 @@ export async function addEventComment(eventId: string, comment: Omit<Comment, "i
 }
 
 export async function getEventComments(eventId: string): Promise<Comment[]> {
-  try {
+try {
+const q = query(
+collection(db, "comments"),
+where("postId", "==", eventId),
+orderBy("createdAt", "asc")
+);
+const snapshot = await getDocs(q);
+return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Comment) }));
+} catch (error: any) {
+console.warn("Composite index error in getEventComments, falling back to unordered fetch:", error);
+try {
     const q = query(
-      collection(db, "comments"),
-      where("postId", "==", eventId),
-      orderBy("createdAt", "asc")
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Comment) }));
-  } catch (error) {
-    console.error("Error in getEventComments:", error);
-    throw error;
+        collection(db, "comments"),
+        where("postId", "==", eventId)
+      );
+      const snapshot = await getDocs(q);
+      const comments = snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Comment) }));
+      // Sort in memory by createdAt
+      return comments.sort((a, b) => {
+        const aTime = a.createdAt?.toDate?.() || new Date(0);
+        const bTime = b.createdAt?.toDate?.() || new Date(0);
+        return aTime.getTime() - bTime.getTime();
+      });
+    } catch (fallbackError) {
+      console.error("Error in getEventComments fallback:", fallbackError);
+      throw fallbackError;
+    }
   }
 }
 
@@ -367,25 +481,58 @@ export async function createMarketplaceItem(
 }
 
 export async function getMarketplaceItems(category?: string): Promise<MarketplaceItem[]> {
-  const marketplaceRef = collection(db, "marketplace");
-  const q =
-    category && category !== "all"
-      ? query(
-          marketplaceRef,
-          where("category", "==", category),
-          where("sold", "==", false),
-          orderBy("createdAt", "desc"),
-          limit(20)
-        )
-      : query(
-          marketplaceRef,
-          where("sold", "==", false),
-          orderBy("createdAt", "desc"),
-          limit(20)
-        );
+const marketplaceRef = collection(db, "marketplace");
 
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as MarketplaceItem) }));
+if (category && category !== "all") {
+try {
+const q = query(
+marketplaceRef,
+where("category", "==", category),
+where("sold", "==", false),
+orderBy("createdAt", "desc"),
+limit(20)
+);
+const snapshot = await getDocs(q);
+return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as MarketplaceItem) }));
+} catch (error: any) {
+console.warn("Composite index error in getMarketplaceItems, falling back to unordered fetch:", error);
+const q = query(marketplaceRef, where("category", "==", category), where("sold", "==", false));
+      const snapshot = await getDocs(q);
+    const items = snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as MarketplaceItem) }));
+    // Sort in memory by createdAt desc and limit
+      return items
+        .sort((a, b) => {
+          const aTime = a.createdAt?.toDate?.() || new Date(0);
+          const bTime = b.createdAt?.toDate?.() || new Date(0);
+          return bTime.getTime() - aTime.getTime(); // Descending
+        })
+        .slice(0, 20);
+    }
+  } else {
+    try {
+      const q = query(
+        marketplaceRef,
+        where("sold", "==", false),
+        orderBy("createdAt", "desc"),
+        limit(20)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as MarketplaceItem) }));
+    } catch (error: any) {
+      console.warn("Composite index error in getMarketplaceItems, falling back to unordered fetch:", error);
+      const q = query(marketplaceRef, where("sold", "==", false));
+      const snapshot = await getDocs(q);
+      const items = snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as MarketplaceItem) }));
+      // Sort in memory by createdAt desc and limit
+      return items
+        .sort((a, b) => {
+          const aTime = a.createdAt?.toDate?.() || new Date(0);
+          const bTime = b.createdAt?.toDate?.() || new Date(0);
+          return bTime.getTime() - aTime.getTime(); // Descending
+        })
+        .slice(0, 20);
+    }
+  }
 }
 
 // ============================
@@ -425,25 +572,58 @@ export async function createLostFoundItem(
 }
 
 export async function getLostFoundItems(type?: "lost" | "found"): Promise<LostFound[]> {
-  const baseRef = collection(db, "lostFound");
-  const q =
-    type
-      ? query(
-          baseRef,
-          where("type", "==", type),
-          where("resolved", "==", false),
-          orderBy("createdAt", "desc"),
-          limit(20)
-        )
-      : query(
-          baseRef,
-          where("resolved", "==", false),
-          orderBy("createdAt", "desc"),
-          limit(20)
-        );
+const baseRef = collection(db, "lostFound");
 
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as LostFound) }));
+if (type) {
+try {
+const q = query(
+baseRef,
+where("type", "==", type),
+where("resolved", "==", false),
+orderBy("createdAt", "desc"),
+limit(20)
+);
+const snapshot = await getDocs(q);
+return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as LostFound) }));
+} catch (error: any) {
+console.warn("Composite index error in getLostFoundItems, falling back to unordered fetch:", error);
+const q = query(baseRef, where("type", "==", type), where("resolved", "==", false));
+      const snapshot = await getDocs(q);
+    const items = snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as LostFound) }));
+    // Sort in memory by createdAt desc and limit
+      return items
+        .sort((a, b) => {
+          const aTime = a.createdAt?.toDate?.() || new Date(0);
+          const bTime = b.createdAt?.toDate?.() || new Date(0);
+          return bTime.getTime() - aTime.getTime(); // Descending
+        })
+        .slice(0, 20);
+    }
+  } else {
+    try {
+      const q = query(
+        baseRef,
+        where("resolved", "==", false),
+        orderBy("createdAt", "desc"),
+        limit(20)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as LostFound) }));
+    } catch (error: any) {
+      console.warn("Composite index error in getLostFoundItems, falling back to unordered fetch:", error);
+      const q = query(baseRef, where("resolved", "==", false));
+      const snapshot = await getDocs(q);
+      const items = snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as LostFound) }));
+      // Sort in memory by createdAt desc and limit
+      return items
+        .sort((a, b) => {
+          const aTime = a.createdAt?.toDate?.() || new Date(0);
+          const bTime = b.createdAt?.toDate?.() || new Date(0);
+          return bTime.getTime() - aTime.getTime(); // Descending
+        })
+        .slice(0, 20);
+    }
+  }
 }
 
 export async function markLostFoundResolved(itemId: string) {
@@ -456,19 +636,63 @@ export async function markLostFoundResolved(itemId: string) {
 // ============================
 
 export async function sendFriendRequest(friendRequest: Omit<FriendRequest, "id" | "createdAt" | "status">) {
-  const data = { ...friendRequest, status: "pending", createdAt: serverTimestamp() };
+  // Validate required fields
+  if (!friendRequest.senderId || !friendRequest.recipientId || !friendRequest.senderName || !friendRequest.recipientName) {
+    throw new Error("Missing required friend request fields");
+  }
+
+  // Don't allow self-friend requests
+  if (friendRequest.senderId === friendRequest.recipientId) {
+    throw new Error("Cannot send friend request to yourself");
+  }
+
+  // Check if there's already a pending request between these users
+  try {
+    const existingRequestQuery = query(
+      collection(db, "friendRequests"),
+      where("senderId", "in", [friendRequest.senderId, friendRequest.recipientId]),
+      where("recipientId", "in", [friendRequest.senderId, friendRequest.recipientId]),
+      where("status", "==", "pending")
+    );
+
+    const existingRequests = await getDocs(existingRequestQuery);
+    if (!existingRequests.empty) {
+      throw new Error("A friend request already exists between these users");
+    }
+  } catch (checkError) {
+    // If the check fails, continue anyway (might be due to permissions)
+    console.warn("Could not check for existing requests:", checkError);
+  }
+
+  // Clean the data - remove undefined values (Firestore doesn't accept them)
+  const cleanFriendRequest = Object.fromEntries(
+    Object.entries(friendRequest).filter(([_, value]) => value !== undefined)
+  );
+
+  const data = { ...cleanFriendRequest, status: "pending", createdAt: serverTimestamp() };
   const requestRef = await addDoc(collection(db, "friendRequests"), data);
 
-  // Create notification for friend request
-  await createNotification({
-    recipientId: friendRequest.recipientId,
-    senderId: friendRequest.senderId,
-    senderName: friendRequest.senderName,
-    senderAvatar: friendRequest.senderAvatar,
-    type: "friend_request",
-    message: "sent you a friend request.",
-    requestId: requestRef.id,
-  });
+// Create notification for friend request (optional - don't fail if this fails)
+try {
+  const notificationData = {
+  recipientId: friendRequest.recipientId,
+  senderId: friendRequest.senderId,
+  senderName: friendRequest.senderName,
+  type: "friend_request",
+  message: "sent you a friend request.",
+  requestId: requestRef.id,
+};
+
+  // Only include senderAvatar if it exists
+  if (friendRequest.senderAvatar) {
+    notificationData.senderAvatar = friendRequest.senderAvatar;
+  }
+
+  await createNotification(notificationData);
+} catch (notificationError) {
+    console.warn("Failed to create notification for friend request:", notificationError);
+    // Don't fail the friend request if notification creation fails
+  }
 
   return requestRef;
 }
@@ -499,7 +723,12 @@ export async function getFriendRequests(userId: string): Promise<FriendRequest[]
 // ============================
 
 export async function createNotification(notification: Omit<Notification, "id" | "createdAt" | "read">) {
-  const data = { ...notification, read: false, createdAt: serverTimestamp() };
+// Clean the data - remove undefined values (Firestore doesn't accept them)
+const cleanNotification = Object.fromEntries(
+    Object.entries(notification).filter(([_, value]) => value !== undefined)
+  );
+
+  const data = { ...cleanNotification, read: false, createdAt: serverTimestamp() };
   return await addDoc(collection(db, "notifications"), data);
 }
 
@@ -531,4 +760,324 @@ export async function markAllNotificationsAsRead(userId: string) {
     batch.push(updateDoc(docSnap.ref, { read: true }));
   }
   await Promise.all(batch);
+}
+
+// ============================
+// 🔹 FRIENDS (ACCEPTED FRIEND REQUESTS)
+// ============================
+
+export async function getFriends(userId: string): Promise<{ id: string; name: string; avatar?: string }[]> {
+  // Get accepted friend requests where user is sender
+  const sentRequests = query(
+    collection(db, "friendRequests"),
+    where("senderId", "==", userId),
+    where("status", "==", "accepted")
+  );
+
+  // Get accepted friend requests where user is recipient
+  const receivedRequests = query(
+    collection(db, "friendRequests"),
+    where("recipientId", "==", userId),
+    where("status", "==", "accepted")
+  );
+
+  const [sentSnapshot, receivedSnapshot] = await Promise.all([
+    getDocs(sentRequests),
+    getDocs(receivedRequests)
+  ]);
+
+  const friends = new Map<string, { id: string; name: string; avatar?: string }>();
+
+  // Add friends from sent requests
+  sentSnapshot.docs.forEach(doc => {
+    const data = doc.data() as FriendRequest;
+    friends.set(data.recipientId, {
+      id: data.recipientId,
+      name: data.recipientName,
+      avatar: data.recipientAvatar
+    });
+  });
+
+  // Add friends from received requests
+  receivedSnapshot.docs.forEach(doc => {
+    const data = doc.data() as FriendRequest;
+    friends.set(data.senderId, {
+      id: data.senderId,
+      name: data.senderName,
+      avatar: data.senderAvatar
+    });
+  });
+
+  return Array.from(friends.values());
+}
+
+export async function getRelationshipStatus(currentUserId: string, targetUserId: string): Promise<{
+status: "friends" | "pending_sent" | "pending_received" | "none";
+requestId?: string;
+}> {
+try {
+  // Check if they're already friends
+  const friends = await getFriends(currentUserId);
+  const isFriend = friends.some(friend => friend.id === targetUserId);
+if (isFriend) {
+    return { status: "friends" };
+    }
+
+  // Check for pending requests
+const sentRequests = query(
+  collection(db, "friendRequests"),
+  where("senderId", "==", currentUserId),
+  where("recipientId", "==", targetUserId),
+    where("status", "==", "pending")
+    );
+
+const receivedRequests = query(
+  collection(db, "friendRequests"),
+  where("senderId", "==", targetUserId),
+  where("recipientId", "==", currentUserId),
+    where("status", "==", "pending")
+    );
+
+const [sentSnapshot, receivedSnapshot] = await Promise.all([
+  getDocs(sentRequests),
+    getDocs(receivedRequests)
+    ]);
+
+if (sentSnapshot.docs.length > 0) {
+    return { status: "pending_sent", requestId: sentSnapshot.docs[0].id };
+    }
+
+if (receivedSnapshot.docs.length > 0) {
+    return { status: "pending_received", requestId: receivedSnapshot.docs[0].id };
+    }
+
+    return { status: "none" };
+  } catch (error) {
+    console.warn("Error checking relationship status:", error);
+    // Return "none" as fallback to allow friend requests
+    return { status: "none" };
+  }
+}
+
+// ============================
+// 🔹 CHATS & MESSAGING
+// ============================
+
+export async function createDirectChat(userId1: string, userId2: string): Promise<string> {
+  // Check if direct chat already exists
+  const existingChat = await findDirectChat(userId1, userId2);
+  if (existingChat) {
+    return existingChat.id!;
+  }
+
+  // Get user details for participants
+  const [user1Details, user2Details] = await Promise.all([
+    getUserDetails(userId1),
+    getUserDetails(userId2)
+  ]);
+
+  const chatData: Omit<Chat, "id"> = {
+    type: "direct",
+    participants: [userId1, userId2],
+    participantDetails: [
+      { id: userId1, name: user1Details.name, avatar: user1Details.avatar },
+      { id: userId2, name: user2Details.name, avatar: user2Details.avatar }
+    ],
+    createdBy: userId1,
+    createdAt: serverTimestamp(),
+    unreadCount: { [userId1]: 0, [userId2]: 0 }
+  };
+
+  const chatRef = await addDoc(collection(db, "chats"), chatData);
+  return chatRef.id;
+}
+
+export async function createGroupChat(
+  creatorId: string,
+  name: string,
+  description?: string,
+  participants: string[]
+): Promise<string> {
+  // Get participant details
+  const participantDetails = await Promise.all(
+    participants.map(id => getUserDetails(id))
+  );
+
+  // Clean the data - remove undefined values (Firestore doesn't accept them)
+  const cleanChatData = {
+  type: "group",
+  name,
+  participants: [...participants, creatorId], // Include creator
+  participantDetails,
+  createdBy: creatorId,
+  createdAt: serverTimestamp(),
+  unreadCount: participants.reduce((acc, id) => ({ ...acc, [id]: 0 }), { [creatorId]: 0 })
+  };
+
+  // Only include description if it exists
+  if (description) {
+    cleanChatData.description = description;
+  }
+
+  const chatRef = await addDoc(collection(db, "chats"), cleanChatData);
+  return chatRef.id;
+}
+
+export async function getUserChats(userId: string): Promise<Chat[]> {
+  const q = query(
+    collection(db, "chats"),
+    where("participants", "array-contains", userId),
+    orderBy("createdAt", "desc")
+  );
+
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Chat) }));
+}
+
+export async function sendMessage(message: Omit<ChatMessage, "id" | "createdAt">): Promise<string> {
+  const messageData = {
+    ...message,
+    createdAt: serverTimestamp()
+  };
+
+  const messageRef = await addDoc(collection(db, "messages"), messageData);
+
+  // Update chat's last message
+  const chatRef = doc(db, "chats", message.chatId);
+  await updateDoc(chatRef, {
+    lastMessage: {
+      text: message.content,
+      senderId: message.senderId,
+      senderName: message.senderName,
+      timestamp: serverTimestamp()
+    },
+    // Increment unread count for other participants
+    [`unreadCount.${message.senderId}`]: 0 // Reset sender's unread count
+  });
+
+  // Increment unread count for other participants
+  const chatSnap = await getDoc(chatRef);
+  if (chatSnap.exists()) {
+    const chat = chatSnap.data() as Chat;
+    const updates: any = {};
+    chat.participants.forEach(participantId => {
+      if (participantId !== message.senderId) {
+        const currentCount = chat.unreadCount?.[participantId] || 0;
+        updates[`unreadCount.${participantId}`] = currentCount + 1;
+      }
+    });
+    await updateDoc(chatRef, updates);
+  }
+
+  return messageRef.id;
+}
+
+export async function getChatMessages(chatId: string, limitCount = 50): Promise<ChatMessage[]> {
+  const q = query(
+    collection(db, "messages"),
+    where("chatId", "==", chatId),
+    orderBy("createdAt", "desc"),
+    limit(limitCount)
+  );
+
+  const snapshot = await getDocs(q);
+  const messages = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as ChatMessage) }));
+
+  // Reverse to show oldest first
+  return messages.reverse();
+}
+
+export async function markChatAsRead(chatId: string, userId: string) {
+  const chatRef = doc(db, "chats", chatId);
+  await updateDoc(chatRef, {
+    [`unreadCount.${userId}`]: 0
+  });
+}
+
+export async function updateChat(chatId: string, updates: Partial<Pick<Chat, "name" | "description" | "avatar">>) {
+  const chatRef = doc(db, "chats", chatId);
+  await updateDoc(chatRef, updates);
+}
+
+export async function addParticipantsToGroup(chatId: string, participantIds: string[]) {
+  const chatRef = doc(db, "chats", chatId);
+
+  // Get current chat
+  const chatSnap = await getDoc(chatRef);
+  if (!chatSnap.exists()) throw new Error("Chat not found");
+
+  const chat = chatSnap.data() as Chat;
+  if (chat.type !== "group") throw new Error("Can only add participants to group chats");
+
+  // Get new participant details
+  const newParticipantDetails = await Promise.all(
+    participantIds.map(id => getUserDetails(id))
+  );
+
+  // Update participants and unread counts
+  const updatedParticipants = [...chat.participants, ...participantIds];
+  const updatedParticipantDetails = [...(chat.participantDetails || []), ...newParticipantDetails];
+  const updatedUnreadCount = { ...chat.unreadCount };
+  participantIds.forEach(id => {
+    updatedUnreadCount[id] = 0;
+  });
+
+  await updateDoc(chatRef, {
+    participants: updatedParticipants,
+    participantDetails: updatedParticipantDetails,
+    unreadCount: updatedUnreadCount
+  });
+}
+
+export async function removeParticipantFromGroup(chatId: string, participantId: string) {
+  const chatRef = doc(db, "chats", chatId);
+
+  const chatSnap = await getDoc(chatRef);
+  if (!chatSnap.exists()) throw new Error("Chat not found");
+
+  const chat = chatSnap.data() as Chat;
+  if (chat.type !== "group") throw new Error("Can only remove participants from group chats");
+
+  const updatedParticipants = chat.participants.filter(id => id !== participantId);
+  const updatedParticipantDetails = chat.participantDetails?.filter(p => p.id !== participantId);
+  const updatedUnreadCount = { ...chat.unreadCount };
+  delete updatedUnreadCount[participantId];
+
+  await updateDoc(chatRef, {
+    participants: updatedParticipants,
+    participantDetails: updatedParticipantDetails,
+    unreadCount: updatedUnreadCount
+  });
+}
+
+// ============================
+// 🔹 HELPERS
+// ============================
+
+async function getUserDetails(userId: string): Promise<{ id: string; name: string; avatar?: string }> {
+  // This is a simple implementation - in a real app, you'd have a users collection
+  // For now, we'll return basic info - you might want to expand this
+  return {
+    id: userId,
+    name: `User ${userId.substring(0, 8)}`, // Placeholder
+    avatar: undefined
+  };
+}
+
+async function findDirectChat(userId1: string, userId2: string): Promise<Chat | null> {
+  const q = query(
+    collection(db, "chats"),
+    where("type", "==", "direct"),
+    where("participants", "array-contains", userId1)
+  );
+
+  const snapshot = await getDocs(q);
+  for (const doc of snapshot.docs) {
+    const chat = { id: doc.id, ...(doc.data() as Chat) };
+    if (chat.participants.includes(userId2)) {
+      return chat;
+    }
+  }
+
+  return null;
 }
