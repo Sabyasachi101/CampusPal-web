@@ -223,8 +223,8 @@ export default function Chat() {
       await createGroupChat(
         currentUser.uid,
         groupName.trim(),
-        groupDescription.trim() || undefined,
-        selectedFriends
+        selectedFriends,
+        groupDescription.trim() || undefined
       );
 
       const updatedChats = await getUserChats(currentUser.uid);

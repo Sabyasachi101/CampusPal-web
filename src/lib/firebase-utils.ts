@@ -944,8 +944,8 @@ export async function createDirectChat(userId1: string, userId2: string): Promis
 export async function createGroupChat(
   creatorId: string,
   name: string,
-  description?: string,
-  participants: string[]
+  participants: string[],
+  description?: string
 ): Promise<string> {
   // Get participant details
   const rawParticipantDetails = await Promise.all(

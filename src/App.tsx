@@ -23,6 +23,7 @@ const Marketplace = lazy(() => import("./pages/Marketplace"));
 const StudyCorner = lazy(() => import("./pages/StudyCorner"));
 const LostFound = lazy(() => import("./pages/LostFound"));
 const Directory = lazy(() => import("./pages/Directory"));
+const PlacementsInternships = lazy(() => import("./pages/PlacementsInternships"));
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ const App = () => (
               <Route path="/study-corner" element={<StudyCorner />} />
               <Route path="/lost-found" element={<LostFound />} />
               <Route path="/directory" element={<Directory />} />
+              <Route path="/placements" element={<PlacementsInternships />} />
               <Route path="/admin" element={<Feed />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<NotFound />} />
