@@ -11,14 +11,7 @@ import {
   MessageCircle,
   Share2,
   Image as ImageIcon,
-  Send,
   X,
-  MoreVertical,
-  Edit,
-  Trash2,
-  Eye,
-  EyeOff,
-  MoreHorizontal,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,18 +25,8 @@ import {
   addComment,
   getComments,
   Comment,
-  deletePost,
-  updatePost,
-  updateComment,
-  deleteComment,
 } from "@/lib/firebase-utils";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -51,26 +34,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatDistanceToNow } from "date-fns";
+import { supabase } from "@/SupabaseConfig";
+import imageCompression from "browser-image-compression";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { formatDistanceToNow } from "date-fns";
-import { supabase } from "@/SupabaseConfig";
-import imageCompression from "browser-image-compression";
 
 // ✅ Compress and resize image before upload
 async function compressImage(file: File): Promise<File> {
@@ -88,7 +60,7 @@ async function compressImage(file: File): Promise<File> {
     return compressedFile;
   } catch (error) {
     console.error("Error compressing image:", error);
-    return file; // fallback if compression fails
+    return file;
   }
 }
 
@@ -132,19 +104,7 @@ export default function Feed() {
   const [imagePreview, setImagePreview] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [loadingPosts, setLoadingPosts] = useState(true);
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [newComment, setNewComment] = useState("");
-  const [editingPost, setEditingPost] = useState<Post | null>(null);
-  const [editContent, setEditContent] = useState("");
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [postToDelete, setPostToDelete] = useState<Post | null>(null);
-  const [editingComment, setEditingComment] = useState<Comment | null>(null);
-  const [editCommentContent, setEditCommentContent] = useState("");
-  const [deleteCommentDialogOpen, setDeleteCommentDialogOpen] = useState(false);
-  const [commentToDelete, setCommentToDelete] = useState<Comment | null>(null);
 
-  // ✅ Load posts
   useEffect(() => {
     if (!currentUser) {
       navigate("/login");
@@ -244,42 +204,43 @@ export default function Feed() {
     }
   }
 
-  // ✅ Comments
+  // ✅ Share Post
+  function handleShare(post: Post) {
+    const postUrl = `${window.location.origin}/post/${post.id}`;
+    const text = post.content
+      ? `Check out this post on CampusPal: "${post.content.substring(0, 100)}"${
+          post.content.length > 100 ? "..." : ""
+        }`
+      : "Check out this post on CampusPal!";
+
+    const shareData = {
+      title: "CampusPal Post",
+      text,
+      url: postUrl,
+    };
+
+    if (navigator.share) {
+      navigator
+        .share(shareData)
+        .then(() => toast.success("Shared successfully!"))
+        .catch((err) => {
+          if (err.name !== "AbortError") {
+            toast.error("Failed to share post");
+            console.error("Share error:", err);
+          }
+        });
+    } else {
+      navigator.clipboard.writeText(`${text} ${postUrl}`);
+      toast.success("Link copied to clipboard!");
+    }
+  }
+
+  // ✅ Comments (open later)
   async function openComments(post: Post) {
-    setSelectedPost(post);
-    if (post.id) {
-      try {
-        const fetchedComments = await getComments(post.id);
-        setComments(fetchedComments);
-      } catch {
-        toast.error("Error loading comments");
-      }
-    }
+    toast.info("Comments feature coming soon!");
   }
 
-  async function handleAddComment() {
-    if (!newComment.trim() || !selectedPost?.id || !currentUser) return;
-    const authorName = userProfile?.displayName || currentUser.displayName || "Anonymous";
-    const authorAvatar = userProfile?.photoURL || currentUser.photoURL || "";
-    try {
-      await addComment({
-        postId: selectedPost.id,
-        authorId: currentUser.uid,
-        authorName,
-        authorAvatar,
-        content: newComment,
-      });
-      setNewComment("");
-      const fetchedComments = await getComments(selectedPost.id);
-      setComments(fetchedComments);
-      loadPosts();
-      toast.success("Comment added!");
-    } catch {
-      toast.error("Failed to add comment");
-    }
-  }
-
-  // ✅ UI Render
+  // ✅ Render
   if (!currentUser) return null;
 
   return (
@@ -415,12 +376,12 @@ export default function Feed() {
                   <p className="mt-3 text-sm">{post.content}</p>
                   {post.imageUrl && (
                     <div className="mt-3 -mx-4 overflow-hidden rounded-b-md bg-black/5 flex items-center justify-center">
-  <img
-    src={post.imageUrl}
-    alt="Post content"
-    className="max-h-[400px] w-auto object-contain transition-transform duration-300 hover:scale-105"
-  />
-</div>
+                      <img
+                        src={post.imageUrl}
+                        alt="Post content"
+                        className="max-h-[400px] w-auto object-contain transition-transform duration-300 hover:scale-105"
+                      />
+                    </div>
                   )}
                 </div>
                 <Separator />
@@ -436,6 +397,7 @@ export default function Feed() {
                     />
                     {!post.hideLikes && <span className="text-xs">{post.likeCount || 0}</span>}
                   </Button>
+
                   <Button
                     variant="ghost"
                     size="sm"
@@ -445,14 +407,51 @@ export default function Feed() {
                     <MessageCircle className="h-4 w-4" />
                     <span className="text-xs">{post.commentCount || 0}</span>
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="gap-2 flex-1"
-                    onClick={() => toast.info("Share feature coming soon!")}
-                  >
-                    <Share2 className="h-4 w-4" />
-                  </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="gap-2 flex-1">
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleShare(post)}>
+                        Share via System
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          window.open(
+                            `https://wa.me/?text=${encodeURIComponent(
+                              `Check out this post on CampusPal:\n${post.content}\n${window.location.origin}/post/${post.id}`
+                            )}`,
+                            "_blank"
+                          )
+                        }
+                      >
+                        WhatsApp
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          window.open(
+                            `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+                              `Check out this post on CampusPal! ${window.location.origin}/post/${post.id}`
+                            )}`,
+                            "_blank"
+                          )
+                        }
+                      >
+                        Twitter / X
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`);
+                          toast.success("Link copied to clipboard!");
+                        }}
+                      >
+                        Copy Link
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </Card>
             ))
