@@ -1,23 +1,104 @@
-import { Search, MessageSquare } from "lucide-react";
+import { Search, MessageSquare, Menu, Home, Calendar, Users, ShoppingBag, BookOpen, FileSearch, UsersRound, Briefcase, User, Settings } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NotificationDropdown } from "@/components/NotificationDropdown";
 import { useAuth } from "@/contexts/AuthContext";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
+import { NavLink, useLocation } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import { useState } from "react";
 import logo from '../../public/logo.png';
+
+const navigation = [
+    { name: "Feed", href: "/feed", icon: Home },
+    { name: "Chat", href: "/chat", icon: MessageSquare },
+    { name: "Events", href: "/events", icon: Calendar },
+    { name: "Placements & Internships", href: "/placements", icon: Briefcase },
+    { name: "Directory", href: "/directory", icon: UsersRound },
+    { name: "Marketplace", href: "/marketplace", icon: ShoppingBag },
+    { name: "Study Corner", href: "/study-corner", icon: BookOpen },
+    { name: "Lost & Found", href: "/lost-found", icon: FileSearch },
+    { name: "Clubs", href: "/clubs", icon: Users },
+];
+
+const bottomNavigation = [
+    { name: "Profile", href: "/profile", icon: User },
+    { name: "Settings", href: "/settings", icon: Settings },
+];
 
 export const Header = () => {
     const { currentUser } = useAuth();
+    const location = useLocation();
+    const [drawerOpen, setDrawerOpen] = useState(false);
 
     return (
         <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60 animate-fade-in">
             <div className="flex h-16 items-center gap-2 sm:gap-4 px-4 sm:px-6">
-                {/* Logo - Mobile Only */}
+                {/* Mobile Menu & Logo */}
                 <div className="flex lg:hidden items-center gap-2">
-
-                    <img className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground" src={logo} alt="CampusPal Logo" />
-
+                    <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+                        <DrawerTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-9 w-9">
+                                <Menu className="h-5 w-5" />
+                            </Button>
+                        </DrawerTrigger>
+                        <DrawerContent className="h-[85vh]">
+                            <DrawerHeader className="border-b border-border">
+                                <div className="flex items-center gap-3">
+                                    <img className="h-10 w-10 rounded-xl" src={logo} alt="CampusPal Logo" />
+                                    <DrawerTitle className="text-xl font-bold">CampusPal</DrawerTitle>
+                                </div>
+                            </DrawerHeader>
+                            <div className="overflow-y-auto p-4">
+                                <nav className="space-y-1">
+                                    {navigation.map((item) => {
+                                        const isActive = location.pathname === item.href;
+                                        return (
+                                            <NavLink
+                                                key={item.name}
+                                                to={item.href}
+                                                onClick={() => setDrawerOpen(false)}
+                                                className={cn(
+                                                    "flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-smooth",
+                                                    isActive
+                                                        ? "bg-primary text-primary-foreground shadow-soft"
+                                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                )}
+                                            >
+                                                <item.icon className="h-5 w-5" />
+                                                <span>{item.name}</span>
+                                            </NavLink>
+                                        );
+                                    })}
+                                </nav>
+                                <div className="border-t border-border my-4" />
+                                <nav className="space-y-1">
+                                    {bottomNavigation.map((item) => {
+                                        const isActive = location.pathname === item.href;
+                                        return (
+                                            <NavLink
+                                                key={item.name}
+                                                to={item.href}
+                                                onClick={() => setDrawerOpen(false)}
+                                                className={cn(
+                                                    "flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-smooth",
+                                                    isActive
+                                                        ? "bg-primary text-primary-foreground shadow-soft"
+                                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                )}
+                                            >
+                                                <item.icon className="h-5 w-5" />
+                                                <span>{item.name}</span>
+                                            </NavLink>
+                                        );
+                                    })}
+                                </nav>
+                            </div>
+                        </DrawerContent>
+                    </Drawer>
+                    <img className="h-8 w-8 rounded-lg" src={logo} alt="CampusPal Logo" />
                 </div>
 
                 {/* Search */}
