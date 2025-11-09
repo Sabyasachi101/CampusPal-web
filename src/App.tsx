@@ -25,6 +25,9 @@ const LostFound = lazy(() => import("./pages/LostFound"));
 const Directory = lazy(() => import("./pages/Directory"));
 const PlacementsInternships = lazy(() => import("./pages/PlacementsInternships"));
 
+// 👇 New Lazy Load for Club Chat Room
+const ClubChat = lazy(() => import("./pages/ClubChat"));
+
 const queryClient = new QueryClient();
 
 const LoadingFallback = () => (
@@ -42,9 +45,12 @@ const App = () => (
           <Sonner />
           <Suspense fallback={<LoadingFallback />}>
             <Routes>
+              {/* Public Routes */}
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<SignUp />}/>
+              <Route path="/signup" element={<SignUp />} />
+
+              {/* Main App Routes */}
               <Route path="/feed" element={<Feed />} />
               <Route path="/chat" element={<Chat />} />
               <Route path="/events" element={<Events />} />
@@ -57,8 +63,12 @@ const App = () => (
               <Route path="/lost-found" element={<LostFound />} />
               <Route path="/directory" element={<Directory />} />
               <Route path="/placements" element={<PlacementsInternships />} />
-              <Route path="/admin" element={<Feed />} />
               <Route path="/settings" element={<Settings />} />
+
+              {/* 👇 New Dynamic Route for Club Chat Room */}
+              <Route path="/clubs/:clubId/chat" element={<ClubChat />} />
+
+              {/* Catch-all */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
