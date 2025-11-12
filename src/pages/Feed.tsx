@@ -233,7 +233,20 @@ export default function Feed() {
                     currentUser.displayName || "Anonymous",
                     currentUser.photoURL || undefined
                 );
-            loadPosts();
+            
+            // Update post state locally instead of reloading entire feed
+            setPosts(posts.map(p => {
+                if (p.id === post.id) {
+                    return {
+                        ...p,
+                        likes: isLiked 
+                            ? p.likes?.filter(uid => uid !== currentUser.uid) || []
+                            : [...(p.likes || []), currentUser.uid],
+                        likeCount: isLiked ? (p.likeCount || 1) - 1 : (p.likeCount || 0) + 1
+                    };
+                }
+                return p;
+            }));
         } catch (error: any) {
             console.error("Error updating like:", error);
             toast.error("Error updating like");
