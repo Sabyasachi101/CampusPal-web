@@ -125,6 +125,8 @@ Open a Pull Request 🚀
 
 Ishaan Sharma
 🎓 Thapar Institute of Engineering & Technology
+Mukul Ghai
+🎓 Thapar Institute of Engineering & Technology
 
 
 
